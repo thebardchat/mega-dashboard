@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Command Center</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #333;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid;
+        }
+        
+        .medical { border-left-color: #e74c3c; }
+        .school { border-left-color: #3498db; }
+        .reminders { border-left-color: #2ecc71; }
+        .family { border-left-color: #f39c12; }
+        
+        .card h3 {
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .icon {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .add-button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 15px;
+        }
+        
+        .add-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .event-list {
+            space-y: 10px;
+        }
+        
+        .event-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .event-date {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+        }
+        
+        .event-title {
+            margin: 5px 0;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .event-details {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .quick-add {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            margin-top: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Family Command Center</h1>
+            <p>Keep track of medical appointments, school dates, and important reminders</p>
+        </div>
+        
+        <div class="dashboard">
+            <div class="card medical">
+                <h3>
+                    <svg class="icon" fill="#e74c3c" viewBox="0 0 24 24">
+                        <path d="M19 8h-2v3h-3v2h3v3h2v-3h3v-2h-3V8zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/>
+                    </svg>
+                    Medical Appointments
+                </h3>
+                <button class="add-button" onclick="showAddForm('medical')">+ Add Medical Appointment</button>
+                <div class="event-list" id="medical-events">
+                    <div class="event-item">
+                        <div class="event-date">No appointments scheduled</div>
+                        <div class="event-title">Click "Add Medical Appointment" to get started</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card school">
+                <h3>
+                    <svg class="icon" fill="#3498db" viewBox="0 0 24 24">
+                        <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/>
+                    </svg>
+                    School Events
+                </h3>
+                <button class="add-button" onclick="showAddForm('school')">+ Add School Event</button>
+                <div class="event-list" id="school-events">
+                    <div class="event-item">
+                        <div class="event-date">No school events scheduled</div>
+                        <div class="event-title">Click "Add School Event" to get started</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card reminders">
+                <h3>
+                    <svg class="icon" fill="#2ecc71" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Reminders
+                </h3>
+                <button class="add-button" onclick="showAddForm('reminder')">+ Add Reminder</button>
+                <div class="event-list" id="reminder-events">
+                    <div class="event-item">
+                        <div class="event-date">No reminders set</div>
+                        <div class="event-title">Click "Add Reminder" to get started</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card family">
+                <h3>
+                    <svg class="icon" fill="#f39c12" viewBox="0 0 24 24">
+                        <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A1.5 1.5 0 0 0 18.54 8H17c-.8 0-1.54.37-2 1l-3.72 5.01L8.54 8.63A1.5 1.5 0 0 0 7.12 8H5.58c-.8 0-1.54.37-2 1L1.04 16H3.5v6h2v-6h1.25l.81-2.09L9.5 16H11v6h2v-6h.5L15.95 8.63 13.5 14v6h2zm-9.5-10c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+                    </svg>
+                    Family Events
+                </h3>
+                <button class="add-button" onclick="showAddForm('family')">+ Add Family Event</button>
+                <div class="event-list" id="family-events">
+                    <div class="event-item">
+                        <div class="event-date">No family events scheduled</div>
+                        <div class="event-title">Click "Add Family Event" to get started</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="quick-add" id="add-form" style="display: none;">
+            <h3>Add New Event</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="event-title">Event Title</label>
+                    <input type="text" id="event-title" placeholder="Enter event title">
+                </div>
+                <div class="form-group">
+                    <label for="event-category">Category</label>
+                    <select id="event-category">
+                        <option value="medical">Medical Appointment</option>
+                        <option value="school">School Event</option>
+                        <option value="reminder">Reminder</option>
+                        <option value="family">Family Event</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="event-date">Date</label>
+                    <input type="date" id="event-date">
+                </div>
+                <div class="form-group">
+                    <label for="event-time">Time</label>
+                    <input type="time" id="event-time">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="event-details">Details/Notes</label>
+                <textarea id="event-details" rows="3" placeholder="Additional details, location, etc."></textarea>
+            </div>
+            <div>
+                <button class="add-button" onclick="addEvent()">Save Event</button>
+                <button class="add-button" onclick="cancelAdd()" style="background: #95a5a6;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let events = {
+            medical: [],
+            school: [],
+            reminder: [],
+            family: []
+        };
+
+        function showAddForm(category) {
+            document.getElementById('add-form').style.display = 'block';
+            document.getElementById('event-category').value = category;
+            document.getElementById('add-form').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelAdd() {
+            document.getElementById('add-form').style.display = 'none';
+            clearForm();
+        }
+
+        function clearForm() {
+            document.getElementById('event-title').value = '';
+            document.getElementById('event-date').value = '';
+            document.getElementById('event-time').value = '';
+            document.getElementById('event-details').value = '';
+        }
+
+        function addEvent() {
+            const title = document.getElementById('event-title').value;
+            const category = document.getElementById('event-category').value;
+            const date = document.getElementById('event-date').value;
+            const time = document.getElementById('event-time').value;
+            const details = document.getElementById('event-details').value;
+
+            if (!title || !date) {
+                alert('Please fill in at least the title and date');
+                return;
+            }
+
+            const event = {
+                id: Date.now(),
+                title: title,
+                date: date,
+                time: time,
+                details: details
+            };
+
+            events[category].push(event);
+            renderEvents(category);
+            cancelAdd();
+        }
+
+        function renderEvents(category) {
+            const container = document.getElementById(category + '-events');
+            
+            if (events[category].length === 0) {
+                container.innerHTML = `
+                    <div class="event-item">
+                        <div class="event-date">No ${category} events scheduled</div>
+                        <div class="event-title">Click "Add ${category}" to get started</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort events by date
+            events[category].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            container.innerHTML = events[category].map(event => `
+                <div class="event-item">
+                    <div class="event-date">${formatDate(event.date)} ${event.time ? 'at ' + formatTime(event.time) : ''}</div>
+                    <div class="event-title">${event.title}</div>
+                    ${event.details ? `<div class="event-details">${event.details}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+            });
+        }
+
+        function formatTime(timeStr) {
+            const time = new Date('1970-01-01T' + timeStr);
+            return time.toLocaleTimeString('en-US', { 
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        // Set today's date as default
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('event-date').value = today;
+        });
+    </script>
+</body>
+</html>
