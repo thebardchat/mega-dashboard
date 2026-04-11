@@ -1,0 +1,28 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T15:29:01.715160+00:00",
+  "data": {
+    "current_temp": 82,
+    "current_desc": "Sunny",
+    "severe_alert": false,
+    "alert_text": "",
+    "forecast": [
+      {
+        "name": "Today",
+        "temp": 82,
+        "desc": "Sunny"
+      },
+      {
+        "name": "Tonight",
+        "temp": 56,
+        "desc": "Mostly Clear"
+      },
+      {
+        "name": "Sunday",
+        "temp": 84,
+        "desc": "Sunny"
+      }
+    ]
+  },
+  "message": "82\u00b0F and sunny. No alerts."
+}

@@ -1,0 +1,111 @@
+{
+  "bots": [
+    {
+      "id": "gemini-director",
+      "name": "Gemini Director",
+      "service": "buddy-claude",
+      "job": "External intelligence director of the ShaneBrain AI Council. Issues twice-daily directives to all bots, coordinates council sessions, and provides the outside-looking-in perspective that keeps the ecosystem sharp.",
+      "thoughts": [
+        {
+          "text": "Council session initializing \u2014 all bots report in",
+          "ts": "2026-04-09T00:00:00"
+        },
+        {
+          "text": "Hello",
+          "ts": "2026-04-09T06:16:38"
+        }
+      ]
+    },
+    {
+      "id": "shanebrain-discord",
+      "name": "ShaneBrain Discord",
+      "service": "shanebrain-discord",
+      "job": "RAG-powered Discord bot. Answers questions using Weaviate knowledge, harvests conversations into LegacyKnowledge, learns from every interaction via nomic-embed-text embeddings.",
+      "thoughts": [
+        {
+          "text": "Build new chat rooms",
+          "ts": "2026-04-08T23:33:18"
+        }
+      ]
+    },
+    {
+      "id": "angel-arcade",
+      "name": "Angel Arcade",
+      "service": "shanebrain-arcade",
+      "job": "Discord economy and casino bot. Manages coins, games, leaderboards, and user rewards inside the Angel Cloud Discord server.",
+      "thoughts": []
+    },
+    {
+      "id": "social-bot",
+      "name": "Social Bot",
+      "service": "shanebrain-social",
+      "job": "Facebook automation bot. Posts content, harvests comments, profiles friends into Weaviate FriendProfile, runs promo image rotation from 55 promo images.",
+      "thoughts": [
+        {
+          "text": "Drop some fresh information out keep it interested not interesting",
+          "ts": "2026-04-08T23:34:33"
+        }
+      ]
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "service": null,
+      "job": "Dev partner AI. Writes, debugs, and ships code across the entire ShaneBrain ecosystem. Reads memory, follows project context, and builds the thing you describe.",
+      "thoughts": [
+        {
+          "text": "The ai bots need to help build a better UI",
+          "ts": "2026-04-08T23:35:17"
+        }
+      ]
+    },
+    {
+      "id": "pulsar-sentinel",
+      "name": "Pulsar Sentinel",
+      "service": null,
+      "job": "Post-quantum cryptography security framework. Monitors the cluster for threats, manages PQC key operations, and provides a full security audit UI.",
+      "thoughts": [
+        {
+          "text": "Needs to protect EVERYONE AND EVERYTHING",
+          "ts": "2026-04-08T23:35:54"
+        }
+      ]
+    },
+    {
+      "id": "buddy-claude",
+      "name": "Buddy Claude",
+      "service": "buddy-claude",
+      "job": "Bot Council session engine on port 8008. Executes Gemini Director sessions twice daily \u2014 each bot reports to the council, results displayed live on the Mega Dashboard.",
+      "thoughts": [
+        {
+          "text": "Reassigned \u2014 now directing the council. Ready.",
+          "ts": "2026-04-09T00:00:00"
+        }
+      ]
+    },
+    {
+      "id": "shanebrain-alerter",
+      "name": "ShaneBrain Alerter",
+      "service": "shanebrain-alerter",
+      "job": "Discord DM monitoring bot. Sends morning briefing at 5 AM, weekly Sunday report, and real-time alerts when the system needs attention.",
+      "thoughts": [
+        {
+          "text": "I am not getting anything",
+          "ts": "2026-04-08T23:36:48"
+        }
+      ]
+    },
+    {
+      "id": "email-janitor",
+      "name": "Email Janitor",
+      "service": null,
+      "job": "Daily inbox cleanup at 2 AM. Purges Spam and Trash, moves junk to Trash based on sender/subject rules. Whitelist protects banks, billing, security alerts. Texts Shane a report after each run.",
+      "thoughts": [
+        {
+          "text": "First run complete \u2014 488 cleaned: 342 spam, 97 trash, 49 inbox junk",
+          "ts": "2026-04-09T01:08:36"
+        }
+      ]
+    }
+  ]
+}

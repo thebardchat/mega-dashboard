@@ -1,0 +1,4434 @@
+/* =============================================================================
+   SHANEBRAIN MEGA DASHBOARD — Application Logic
+   3D Command Center with Knowledge Stars, Tickers, Weather, Audio
+   ============================================================================= */
+
+// ─── Configuration ───────────────────────────────────────────────────────────
+const HOST = window.location.hostname || 'localhost';
+const PORT = window.location.port || '8300';
+const BASE = `http://${HOST}:${PORT}`;
+const CONFIG = {
+    ollamaUrl: `http://${HOST}:11434`,
+    weaviateUrl: `http://${HOST}:8080`,
+    apiBase: BASE,
+    model: 'shanebrain-3b',
+    systemPrompt: `You are ShaneBrain - Shane Brazelton's personal AI assistant.
+Be direct, no fluff. Lead with solutions. Keep responses short and actionable.
+Never say "Certainly!" or "I'd be happy to help!" - just help.`,
+    sobrietyDate: new Date('2023-11-27'),
+    jazzStreamUrl: 'https://ice2.somafm.com/illstreet-128-mp3',
+    selfTalkInterval: 30000,  // rotate every 30s
+    weatherRefresh: 900000,   // 15 min
+    tickerRefresh: 60000,     // 60s
+    healthRefresh: 30000,     // 30s
+};
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const SESSION_ID = 'dashboard-' + Date.now();
+let conversationHistory = [];
+let startTime = Date.now();
+let brownNoiseCtx = null;
+let brownNoiseNode = null;
+let brownNoiseGain = null;
+let brownNoisePlaying = false;
+let jazzAudio = null;
+let jazzPlaying = false;
+let globalVolume = 0.3;
+let knowledgeStars = [];
+let starsScene, starsCamera, starsRenderer, starsGroup;
+let mouseX = 0, mouseY = 0;
+
+// ─── Self-Talk Affirmations ──────────────────────────────────────────────────
+const AFFIRMATIONS = [
+    { text: "You are capable and strong.", category: "strength" },
+    { text: "Your family is your greatest achievement.", category: "family" },
+    { text: "Every sober day is a victory.", category: "sobriety" },
+    { text: "You build things that matter.", category: "purpose" },
+    { text: "Your kids are watching — lead by example.", category: "family" },
+    { text: "Progress, not perfection.", category: "growth" },
+    { text: "You are the architect of your future.", category: "purpose" },
+    { text: "Rest is not weakness. It is strategy.", category: "strength" },
+    { text: "The hard days make the good days sweeter.", category: "resilience" },
+    { text: "You chose this path. You can walk it.", category: "sobriety" },
+    { text: "What you build today, your children inherit tomorrow.", category: "legacy" },
+    { text: "You are not behind. You are exactly where you need to be.", category: "peace" },
+    { text: "Discipline is love in action.", category: "strength" },
+    { text: "You have survived every hard day so far.", category: "resilience" },
+    { text: "Your work ethic is your superpower.", category: "purpose" },
+    { text: "The Pi is running. The bots are online. You built this.", category: "pride" },
+    { text: "Be the dad you needed.", category: "family" },
+    { text: "Clarity over chaos. Always.", category: "peace" },
+    { text: "You are worth the effort.", category: "self-worth" },
+    { text: "Stay the course. The compound effect is real.", category: "growth" },
+    { text: "Your sobriety gave your family their father back.", category: "sobriety" },
+    { text: "Small consistent actions beat big sporadic ones.", category: "growth" },
+    { text: "You don't need permission to be great.", category: "strength" },
+    { text: "The system works because you show up.", category: "purpose" },
+];
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    initMatrixRain();
+    initClock();
+    initSobriety();
+    initSelfTalk();
+    init3DBackground();
+    initEco3D(document.getElementById('eco3d-canvas'), false);
+    initKnowledgeStars();
+    loadKnowledgeStats();
+    setInterval(loadKnowledgeStats, 30000);
+    initPanelTilt();
+    loadWeather();
+    loadTickers();
+    loadHealth();
+    loadLogisticsProducts();
+    loadCalendar();
+    loadEmails();
+    loadEmailResponder();
+    loadNetworkStatus();
+    loadBuildStatus();
+    initThinkingMindMap();
+    generateDailyLetter();
+    loadChatHistory();
+    initMegaPanel();
+    loadWeightLoss();
+    loadBots();
+    loadWatchdog();
+    loadCluster();
+    loadBookProgress();
+    loadMarketSentinel();
+    loadMoodTracker();
+    loadSocialReporter();
+    loadKnowledgeHarvester();
+    loadWeatherBrain();
+    loadMegaBrain();
+    loadVoiceDumpStats();
+
+    setInterval(loadMegaBrain, 30000);  // MEGA-SHANEBRAIN panel — refresh every 30s
+    setInterval(loadWatchdog, 30000);
+    setInterval(loadCluster, 60000);
+    setInterval(loadBookProgress, 900000);
+    setInterval(loadMarketSentinel, 60000);
+    setInterval(loadMoodTracker, 120000);
+    setInterval(loadSocialReporter, 300000);
+    setInterval(loadKnowledgeHarvester, 600000);
+    setInterval(loadWeatherBrain, 900000);
+
+    // Refresh intervals
+    setInterval(loadWeather, CONFIG.weatherRefresh);
+    setInterval(loadTickers, CONFIG.tickerRefresh);
+    setInterval(loadCalendar, 300000); // refresh calendar every 5 min
+    setInterval(loadEmails, 120000); // refresh emails every 2 min
+    setInterval(loadEmailResponder, 60000); // responder state every 1 min
+    setInterval(loadHealth, CONFIG.healthRefresh);
+    setInterval(rotateSelfTalk, CONFIG.selfTalkInterval);
+    setInterval(updateUptime, 1000);
+    setInterval(loadNetworkStatus, 60000); // network every 60s
+    setInterval(loadBuildStatus, 30000); // build status every 30s
+    setInterval(loadSystemTicker, 30000); // system ticker every 30s
+
+    // Track mouse for 3D effects
+    document.addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+        mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    });
+});
+
+// =============================================================================
+// CLOCK, DATE, SOBRIETY
+// =============================================================================
+
+function initClock() {
+    function tick() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+        });
+        document.getElementById('date').textContent = now.toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+        }).toUpperCase();
+    }
+    tick();
+    setInterval(tick, 1000);
+}
+
+function initSobriety() {
+    function update() {
+        const now = new Date();
+        const diff = now - CONFIG.sobrietyDate;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        document.getElementById('sobriety-count').textContent = `${days} DAYS`;
+    }
+    update();
+    setInterval(update, 60000);
+}
+
+function updateUptime() {
+    const elapsed = Date.now() - startTime;
+    const h = Math.floor(elapsed / 3600000);
+    const m = Math.floor((elapsed % 3600000) / 60000);
+    const s = Math.floor((elapsed % 60000) / 1000);
+    const el = document.getElementById('h-uptime');
+    if (el) el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// =============================================================================
+// SELF-TALK
+// =============================================================================
+
+let selfTalkIndex = Math.floor(Math.random() * AFFIRMATIONS.length);
+
+function initSelfTalk() {
+    rotateSelfTalk();
+}
+
+function rotateSelfTalk() {
+    selfTalkIndex = (selfTalkIndex + 1) % AFFIRMATIONS.length;
+    const el = document.getElementById('self-talk');
+    const a = AFFIRMATIONS[selfTalkIndex];
+    if (el) {
+        const textEl = el.querySelector('.self-talk-text');
+        textEl.style.opacity = '0';
+        setTimeout(() => {
+            textEl.textContent = `"${a.text}"`;
+            textEl.style.opacity = '1';
+        }, 300);
+    }
+}
+
+// =============================================================================
+// MATRIX RAIN — Digital rain background effect
+// =============================================================================
+
+function initMatrixRain() {
+    const canvas = document.getElementById('matrix-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789SHANEBRAIN';
+    const charArray = chars.split('');
+    const fontSize = 14;
+    const columns = Math.floor(canvas.width / fontSize);
+    const drops = new Array(columns).fill(1);
+
+    // Randomize initial positions so it doesn't all start from the top
+    for (let i = 0; i < drops.length; i++) {
+        drops[i] = Math.floor(Math.random() * canvas.height / fontSize);
+    }
+
+    function drawMatrix() {
+        // Semi-transparent black to create trail effect
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#00ff41';
+        ctx.font = `${fontSize}px monospace`;
+
+        for (let i = 0; i < drops.length; i++) {
+            const char = charArray[Math.floor(Math.random() * charArray.length)];
+            const x = i * fontSize;
+            const y = drops[i] * fontSize;
+
+            // Head of the drop is brighter
+            ctx.fillStyle = Math.random() > 0.95 ? '#ffffff' : Math.random() > 0.5 ? '#00ff41' : '#00aa30';
+            ctx.fillText(char, x, y);
+
+            // Reset drop to top randomly
+            if (y > canvas.height && Math.random() > 0.975) {
+                drops[i] = 0;
+            }
+            drops[i]++;
+        }
+    }
+
+    setInterval(drawMatrix, 50);
+
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+}
+
+// =============================================================================
+// 3D BACKGROUND — Three.js Rotating Command Center
+// =============================================================================
+
+function init3DBackground() {
+    const canvas = document.getElementById('bg-canvas');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Particle field — distant stars
+    const starGeometry = new THREE.BufferGeometry();
+    const starCount = 800;
+    const positions = new Float32Array(starCount * 3);
+    const colors = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+        const i3 = i * 3;
+        positions[i3] = (Math.random() - 0.5) * 30;
+        positions[i3 + 1] = (Math.random() - 0.5) * 30;
+        positions[i3 + 2] = (Math.random() - 0.5) * 30;
+
+        // Cyan/magenta/white mix
+        const r = Math.random();
+        if (r < 0.3) { colors[i3] = 0; colors[i3+1] = 1; colors[i3+2] = 0.98; } // cyan
+        else if (r < 0.5) { colors[i3] = 1; colors[i3+1] = 0; colors[i3+2] = 1; } // magenta
+        else { colors[i3] = 0.8; colors[i3+1] = 0.8; colors[i3+2] = 0.9; } // white-ish
+    }
+
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const starMaterial = new THREE.PointsMaterial({
+        size: 0.04,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.7,
+        sizeAttenuation: true,
+    });
+
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars);
+
+    // Wireframe sphere — holographic command station
+    const sphereGeo = new THREE.IcosahedronGeometry(2.5, 2);
+    const sphereMat = new THREE.MeshBasicMaterial({
+        color: 0x00fff9,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.06,
+    });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    scene.add(sphere);
+
+    // Inner sphere
+    const innerGeo = new THREE.IcosahedronGeometry(1.8, 1);
+    const innerMat = new THREE.MeshBasicMaterial({
+        color: 0xff00ff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.04,
+    });
+    const innerSphere = new THREE.Mesh(innerGeo, innerMat);
+    scene.add(innerSphere);
+
+    // Ring
+    const ringGeo = new THREE.TorusGeometry(3, 0.02, 8, 100);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x00fff9,
+        transparent: true,
+        opacity: 0.1,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+
+    // Second ring at angle
+    const ring2 = new THREE.Mesh(
+        new THREE.TorusGeometry(2.8, 0.015, 8, 80),
+        new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.07 })
+    );
+    ring2.rotation.x = Math.PI / 3;
+    ring2.rotation.y = Math.PI / 4;
+    scene.add(ring2);
+
+    // Animation loop
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const time = Date.now() * 0.001;
+
+        // Slow rotation
+        stars.rotation.y += 0.0003;
+        stars.rotation.x += 0.0001;
+
+        sphere.rotation.y += 0.001;
+        sphere.rotation.x += 0.0005;
+
+        innerSphere.rotation.y -= 0.0015;
+        innerSphere.rotation.z += 0.001;
+
+        ring.rotation.z += 0.0005;
+        ring2.rotation.z -= 0.0007;
+
+        // Mouse parallax — 360 effect
+        camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.02;
+        camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.02;
+        camera.lookAt(scene.position);
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+}
+
+// =============================================================================
+// KNOWLEDGE STARS — 3D Constellation in Panel
+// =============================================================================
+
+// ── Knowledge Stars — mini preview init ──
+function initKnowledgeStars() {
+    const canvas = document.getElementById('stars-canvas');
+    if (!canvas) return;
+    _initStarsOnCanvas(canvas, false);
+    loadKnowledgeData(canvas, false);
+}
+
+let _starsFullInited = false;
+let _starsFullScene, _starsFullCamera, _starsFullRenderer, _starsFullGroup;
+let _starsFullAnimating = false;
+let _allKnowledge = [];
+
+function openKnowledgeStarsFull() {
+    document.getElementById('stars-fullscreen').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    const canvas = document.getElementById('stars-canvas-fs');
+    if (!_starsFullInited) {
+        _starsFullInited = true;
+        _initStarsOnCanvas(canvas, true);
+        loadKnowledgeData(canvas, true);
+    }
+}
+
+function closeKnowledgeStarsFull() {
+    document.getElementById('stars-fullscreen').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function _initStarsOnCanvas(canvas, isFull) {
+    const w = isFull ? window.innerWidth : canvas.clientWidth;
+    const h = isFull ? (window.innerHeight - 56) : canvas.clientHeight;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    camera.position.z = isFull ? 9 : 6;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    if (isFull) {
+        _starsFullScene = scene; _starsFullCamera = camera;
+        _starsFullRenderer = renderer; _starsFullGroup = group;
+        starsScene = scene; starsCamera = camera;
+        starsRenderer = renderer; starsGroup = group;
+    } else {
+        starsScene = scene; starsCamera = camera;
+        starsRenderer = renderer; starsGroup = group;
+    }
+
+    // Drag rotation
+    let isDragging = false, prevX = 0, prevY = 0;
+    canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+    canvas.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mouseleave', () => isDragging = false);
+    canvas.addEventListener('mousemove', e => {
+        if (isDragging) {
+            group.rotation.y += (e.clientX - prevX) * 0.005;
+            group.rotation.x += (e.clientY - prevY) * 0.005;
+            prevX = e.clientX; prevY = e.clientY;
+        }
+        if (isFull) _handleStarHover(e, canvas, camera, group);
+    });
+    canvas.addEventListener('click', e => {
+        if (isFull) _handleStarClick(e, canvas, camera, group);
+    });
+    // Scroll to zoom
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        camera.position.z = Math.max(2, Math.min(20, camera.position.z + e.deltaY * 0.01));
+    }, { passive: false });
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (!isDragging) group.rotation.y += 0.0015;
+        const t = Date.now() * 0.002;
+        // Pulse brain sprite
+        const brain = group.getObjectByName('brain-pulse');
+        if (brain) {
+            const baseScale = isFull ? 2.8 * 1.8 : 2.8 * 0.9;
+            const s = baseScale * (1 + Math.sin(t) * 0.05);
+            brain.scale.set(s, s, 1);
+            brain.material.opacity = 0.85 + Math.sin(t) * 0.1;
+        }
+        // Pulse halo
+        const halo = group.getObjectByName('brain-halo');
+        if (halo) {
+            halo.material.opacity = 0.04 + Math.sin(t * 0.7) * 0.03;
+            halo.rotation.z += 0.002;
+        }
+        // Drift particles
+        const particles = group.getObjectByName('brain-particles');
+        if (particles) {
+            particles.rotation.y += 0.003;
+            particles.rotation.x += 0.001;
+        }
+        renderer.render(scene, camera);
+    }
+    animate();
+}
+
+async function loadKnowledgeData(canvas, isFull) {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/knowledge/all`);
+        const data = await resp.json();
+        const objects = data.objects || [];
+
+        _allKnowledge = objects;
+        // Count display owned by loadKnowledgeStats (true Weaviate total, not fetch limit)
+
+        const group = isFull ? _starsFullGroup : starsGroup;
+        if (!group) return;
+
+        knowledgeStars = objects;
+        const total = objects.length;
+        const radius = isFull ? 5.5 : 2.8;
+
+        // === BRAIN FACE CENTER ===
+        _buildBrainFace(group, isFull);
+
+        // === STARS (Fibonacci sphere) ===
+        const starMeshes = [];
+        objects.forEach((obj, i) => {
+            const category = obj.category || 'general';
+            const color = getCategoryColor(category);
+
+            const phi = Math.acos(1 - 2 * (i + 0.5) / total);
+            const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+
+            const starSize = isFull ? 0.055 : 0.05;
+            const geo = new THREE.SphereGeometry(starSize, 6, 6);
+            const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 });
+            const star = new THREE.Mesh(geo, mat);
+            star.position.set(x, y, z);
+            star.userData = { title: obj.title, category, content: obj.content, index: i, color };
+            group.add(star);
+            starMeshes.push(star);
+
+            // Glow
+            const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12 });
+            const glow = new THREE.Mesh(new THREE.SphereGeometry(starSize * 2.2, 4, 4), glowMat);
+            star.add(glow);
+
+            // Label (only in full screen, only every 3rd star to avoid clutter)
+            if (isFull && i % 3 === 0) {
+                const label = _makeTextSprite(obj.title.substring(0, 22), color);
+                label.position.set(x * 1.18, y * 1.18, z * 1.18);
+                group.add(label);
+            }
+        });
+
+        // === LINES FROM CENTER TO EACH STAR (nearly invisible) ===
+        const linePositions = [];
+        starMeshes.forEach(star => {
+            linePositions.push(0, 0, 0);
+            linePositions.push(star.position.x, star.position.y, star.position.z);
+        });
+        const lineGeo = new THREE.BufferGeometry();
+        lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00fff9, transparent: true, opacity: 0.03 });
+        group.add(new THREE.LineSegments(lineGeo, lineMat));
+
+        if (isFull) {
+            document.getElementById('stars-fs-status').textContent = `${total} knowledge objects`;
+        }
+
+    } catch(e) {
+        console.error('Knowledge stars error:', e);
+    }
+}
+
+function _buildBrainFace(group, isFull) {
+    const scale = isFull ? 1.8 : 0.9;
+
+    // === MAIN BRAIN — HuggingFace generated neon brain image as billboard sprite ===
+    const brainTex = new THREE.TextureLoader().load('brain-glow.webp');
+    const brainMat = new THREE.SpriteMaterial({ map: brainTex, transparent: true, opacity: 0.92, depthWrite: false });
+    const brainSprite = new THREE.Sprite(brainMat);
+    brainSprite.scale.set(2.8 * scale, 2.8 * scale, 1);
+    brainSprite.name = 'brain-pulse';
+    group.add(brainSprite);
+
+    // === OUTER GLOW HALO — soft cyan ring around brain ===
+    const haloGeo = new THREE.RingGeometry(1.2 * scale, 1.6 * scale, 64);
+    const haloMat = new THREE.MeshBasicMaterial({ color: 0x00fff9, transparent: true, opacity: 0.06, side: THREE.DoubleSide });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.name = 'brain-halo';
+    group.add(halo);
+
+    // === PARTICLE CLOUD — floating neural sparks around brain ===
+    const particleCount = isFull ? 200 : 60;
+    const particleGeo = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sparkColors = [
+        [0, 1, 0.98],    // cyan
+        [0.74, 0.08, 1],  // purple
+        [1, 0, 1],        // magenta
+        [0.22, 1, 0.08],  // green
+    ];
+    for (let i = 0; i < particleCount; i++) {
+        const r = (0.8 + Math.random() * 1.2) * scale;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+        const c = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+        colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+    }
+    particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    particleGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const particleMat = new THREE.PointsMaterial({ size: isFull ? 0.04 : 0.025, vertexColors: true, transparent: true, opacity: 0.7, depthWrite: false });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    particles.name = 'brain-particles';
+    group.add(particles);
+}
+
+function _makeTextSprite(text, hexColor) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+    const r = (hexColor >> 16) & 0xff;
+    const g = (hexColor >> 8) & 0xff;
+    const b = hexColor & 0xff;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
+    ctx.font = '13px Share Tech Mono, monospace';
+    ctx.fillText(text, 4, 30);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.7 });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.2, 0.22, 1);
+    return sprite;
+}
+
+const _raycaster = new THREE.Raycaster();
+const _mouse = new THREE.Vector2();
+
+function _getStarAtMouse(e, canvas, camera, group) {
+    const rect = canvas.getBoundingClientRect();
+    _mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    _mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    _raycaster.setFromCamera(_mouse, camera);
+    const meshes = group.children.filter(c => c.isMesh && c.userData.title);
+    const hits = _raycaster.intersectObjects(meshes);
+    return hits.length ? hits[0].object : null;
+}
+
+function _handleStarHover(e, canvas, camera, group) {
+    const star = _getStarAtMouse(e, canvas, camera, group);
+    const tooltip = document.getElementById('star-tooltip');
+    if (star) {
+        canvas.style.cursor = 'pointer';
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+        tooltip.innerHTML = `<div style="color:#00fff9;margin-bottom:4px">${star.userData.title}</div>
+            <div style="color:#888;font-size:0.65rem">${star.userData.category}</div>
+            ${star.userData.content ? `<div style="color:#ccc;margin-top:6px;font-size:0.68rem">${star.userData.content.substring(0,120)}…</div>` : ''}`;
+    } else {
+        canvas.style.cursor = 'grab';
+        tooltip.style.display = 'none';
+    }
+}
+
+function _handleStarClick(e, canvas, camera, group) {
+    const star = _getStarAtMouse(e, canvas, camera, group);
+    if (star) {
+        document.getElementById('star-search-fs').value = star.userData.title;
+        searchStars(star.userData.title);
+    }
+}
+
+function getCategoryColor(category) {
+    const map = {
+        'technical': 0x00fff9,
+        'tech': 0x00fff9,
+        'personal': 0xff00ff,
+        'family': 0xff00ff,
+        'business': 0xffd700,
+        'finance': 0xffd700,
+        'health': 0x39ff14,
+        'wellness': 0x39ff14,
+        'security': 0xbc13fe,
+        'general': 0x00aaff,
+    };
+    const key = Object.keys(map).find(k => category.toLowerCase().includes(k));
+    return map[key] || 0x00aaff;
+}
+
+function searchStars(query) {
+    const group = _starsFullGroup || starsGroup;
+    if (!group) return;
+    const q = (query || '').toLowerCase().trim();
+
+    group.children.forEach(obj => {
+        if (!obj.userData || !obj.userData.title) return;
+        const match = !q || obj.userData.title.toLowerCase().includes(q) || (obj.userData.content || '').toLowerCase().includes(q);
+        if (obj.material) {
+            obj.material.opacity = match ? 0.9 : 0.05;
+            const s = match && q ? 2.2 : 1;
+            obj.scale.set(s, s, s);
+        }
+    });
+}
+
+// =============================================================================
+// 3D PANEL TILT EFFECT
+// =============================================================================
+
+function initPanelTilt() {
+    // Tilt disabled per user preference
+}
+
+// =============================================================================
+// WEATHER
+// =============================================================================
+
+async function loadWeather() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/weather`);
+        const data = await resp.json();
+
+        if (data.error) throw new Error(data.error);
+
+        const cur = data.current;
+        const fc = data.forecast || [];
+
+        // Top bar current
+        document.getElementById('weather-current').textContent =
+            `${cur.temp}°F ${cur.description}`;
+
+        // Top bar forecast
+        const forecastRow = document.getElementById('forecast-row');
+        forecastRow.innerHTML = fc.slice(0, 3).map(f =>
+            `<span class="forecast-day">${f.day}: <span class="fc-temp">${f.high}°</span>${f.icon}</span>`
+        ).join('');
+
+        // Weather panel detail
+        document.getElementById('weather-temp-big').textContent = `${cur.temp}°`;
+        document.getElementById('weather-desc').textContent = cur.description;
+        document.getElementById('weather-humidity').textContent = `Humidity: ${cur.humidity || '--'}%`;
+        document.getElementById('weather-wind').textContent = `Wind: ${cur.wind || '--'}`;
+        document.getElementById('weather-status').classList.add('online');
+
+        // Forecast cards — 5 days for truck/concrete planning
+        const fcDetail = document.getElementById('weather-forecast-detail');
+        fcDetail.innerHTML = fc.slice(0, 5).map(f => `
+            <div class="forecast-card">
+                <div class="fc-day">${f.day}</div>
+                <div class="fc-icon">${f.icon || ''}</div>
+                <div class="fc-temps">
+                    <span class="fc-hi">${f.high}°</span> / <span class="fc-lo">${f.low}°</span>
+                </div>
+                <div class="fc-rain" style="font-size:0.6rem;color:#5bc4f5">🌧 ${f.rain || '0%'}</div>
+                <div style="font-size:0.6rem;color:var(--text-secondary)">${f.description}</div>
+            </div>
+        `).join('');
+
+    } catch (e) {
+        console.error('Weather error:', e);
+        document.getElementById('weather-current').textContent = 'Weather unavailable';
+        document.getElementById('weather-status').classList.add('error');
+    }
+}
+
+// =============================================================================
+// NYSE TICKER
+// =============================================================================
+
+async function loadTickers() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/tickers`);
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        buildTickerStrip(data);
+    } catch (e) {
+        console.error('Ticker error:', e);
+        buildTickerStrip({});
+    }
+}
+
+function buildTickerStrip(data) {
+    const strip1 = document.getElementById('ticker-strip');
+    const strip2 = document.getElementById('ticker-strip-2');
+
+    const sep = '<span class="ticker-sep">|</span>';
+    const bigSep = '<span class="ticker-sep">◆</span>';
+
+    function stockItem(sym, price, change, pct) {
+        const dir = change >= 0 ? 'up' : 'down';
+        const arrow = change >= 0 ? '▲' : '▼';
+        return `<span class="ticker-item">
+            <span class="ticker-symbol">${sym}</span>
+            <span class="ticker-price">${price}</span>
+            <span class="ticker-change ${dir}">${arrow}${Math.abs(pct).toFixed ? Math.abs(pct).toFixed(2) : pct}%</span>
+        </span>`;
+    }
+
+    function textItem(label, value, cls) {
+        return `<span class="ticker-item">
+            <span class="ticker-symbol">${label}</span>
+            <span class="ticker-change ${cls || ''}">${value}</span>
+        </span>`;
+    }
+
+    function quoteItem(text) {
+        return `<span class="ticker-item ticker-quote"><span class="ticker-quote-text">${text}</span></span>`;
+    }
+
+    // ── TICKER 1: Markets + Tech Stocks + Breaking News ──
+    let t1 = [];
+
+    // Tech stocks
+    const tech = (data.tech || []).filter(t => t.price != null);
+    if (tech.length) {
+        t1.push(textItem('── TECH', '', 'up'));
+        tech.forEach(t => t1.push(stockItem(t.symbol, '$'+Number(t.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), t.change, parseFloat(t.pct))));
+    }
+
+    // Crypto
+    const crypto = (data.crypto || []).filter(t => t.price != null);
+    if (crypto.length) {
+        t1.push(textItem('── CRYPTO', '', 'up'));
+        crypto.forEach(t => t1.push(stockItem(t.symbol, '$'+Number(t.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), t.change, parseFloat(t.pct))));
+    }
+
+    // Breaking news
+    const news = [...(data.news || []), ...(data.tech_news || []), ...(data.ai_news || [])];
+    if (news.length) {
+        t1.push(textItem('── BREAKING', '', 'up'));
+        news.forEach(n => t1.push(quoteItem('📰 ' + n)));
+    }
+
+    // Sports scores
+    const sports = data.sports || [];
+    if (sports.length) {
+        t1.push(textItem('── SCORES', '', 'up'));
+        sports.forEach(s => t1.push(quoteItem('🏆 ' + s)));
+    }
+
+    const content1 = t1.join(sep);
+    strip1.innerHTML = content1 + bigSep + content1;
+
+    // ── TICKER 2: Weather Forecast + Shane Quotes + Jeff Quotes + System ──
+    let t2 = [];
+
+    // 10-day forecast
+    const forecast = data.forecast_ticker || [];
+    if (forecast.length) {
+        t2.push(textItem('── FORECAST', '', 'up'));
+        forecast.forEach(f => t2.push(quoteItem('🌡 ' + f)));
+    }
+
+    // Shane quotes
+    const shaneQuotes = data.shane_quotes || [];
+    if (shaneQuotes.length) {
+        t2.push(textItem('── SHANE', '', 'up'));
+        shaneQuotes.forEach(q => t2.push(quoteItem('"' + q + '"')));
+    }
+
+    // Jeff Hollingshead quotes
+    const jeffQuotes = data.jeff_quotes || [];
+    if (jeffQuotes.length) {
+        t2.push(textItem('── SRM', '', 'up'));
+        jeffQuotes.forEach(q => t2.push(quoteItem(q)));
+    }
+
+    // System status
+    t2.push(textItem('── SYSTEM', '', 'up'));
+    t2.push(textItem('SHANEBRAIN', 'ONLINE', 'up'));
+    t2.push(textItem('WEAVIATE', 'ACTIVE', 'up'));
+    t2.push(textItem('HAIKU', 'ONLINE', 'up'));
+    const sob = document.getElementById('sobriety-count');
+    if (sob) t2.push(textItem('SOBER', sob.textContent || '---', 'up'));
+
+    const content2 = t2.join(sep);
+    strip2.innerHTML = content2 + bigSep + content2;
+
+    // Strip 1 (markets/news) scrolls faster, Strip 2 (quotes/forecast) scrolls slower
+    requestAnimationFrame(() => {
+        const w1 = strip1.scrollWidth / 2;
+        strip1.style.animationDuration = `${Math.max(30, w1 / 80)}s`;
+    });
+    requestAnimationFrame(() => {
+        const w2 = strip2.scrollWidth / 2;
+        strip2.style.animationDuration = `${Math.max(60, w2 / 35)}s`;
+    });
+}
+
+// =============================================================================
+// SYSTEM HEALTH
+// =============================================================================
+
+async function loadHealth() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/health`);
+        const data = await resp.json();
+
+        setHealthDot('h-ollama', data.ollama);
+        setHealthDot('h-weaviate', data.weaviate);
+        setHealthDot('h-mcp', data.mcp);
+        setHealthDot('h-gateway', data.gateway);
+
+        if (data.model) document.getElementById('h-model').textContent = data.model;
+        if (data.knowledge) document.getElementById('h-knowledge').textContent = `${data.knowledge} chunks`;
+        if (data.memories) document.getElementById('h-memories').textContent = `${data.memories}`;
+
+    } catch (e) {
+        console.error('Health check error:', e);
+    }
+}
+
+function setHealthDot(id, status) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'health-dot ' + (status ? 'online' : 'offline');
+}
+
+// =============================================================================
+// LOGISTICS QUOTING
+// =============================================================================
+
+let allProducts = [];
+
+async function loadLogisticsProducts() {
+    try {
+        const resp = await fetch('http://127.0.0.1:5001/api/products');
+        allProducts = await resp.json();
+
+        const select = document.getElementById('materialSelect');
+        allProducts.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+        });
+
+        document.getElementById('logistics-status').classList.add('online');
+        calculateQuote();
+    } catch (e) {
+        console.error('Logistics API offline:', e);
+        document.getElementById('logistics-status').classList.add('error');
+        document.getElementById('q-breakdown').textContent = 'Logistics API offline';
+    }
+}
+
+async function calculateQuote() {
+    const dest = document.getElementById('deliveryDest').value;
+    const material = document.getElementById('materialSelect').value;
+    const tons = parseFloat(document.getElementById('loadTons').value) || 0;
+
+    if (tons <= 0) return;
+
+    try {
+        const url = `http://127.0.0.1:5001/api/quote?destination=${dest}&tons=${tons}&material_id=${material}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (resp.ok) {
+            document.getElementById('q-rtt').textContent = `${data.rtt_minutes} min`;
+            document.getElementById('q-rate').textContent = `$${data.haul_rate_per_ton.toFixed(2)}/ton`;
+            document.getElementById('q-total').textContent = `$${data.total_job_price.toFixed(2)}`;
+            document.getElementById('q-breakdown').textContent = `${data.plant} - ${data.breakdown || ''}`;
+        } else {
+            document.getElementById('q-breakdown').textContent = data.error || 'Quote error';
+        }
+    } catch (e) {
+        document.getElementById('q-breakdown').textContent = 'API connection failed';
+    }
+}
+
+// =============================================================================
+// AI CHAT (ShaneBrain via Ollama)
+// =============================================================================
+
+function handleChatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+    }
+}
+
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    input.value = '';
+    addChatMessage(msg, 'user-message', 'USER');
+
+    // Show thinking
+    const thinkingEl = addChatMessage('Processing...', 'ai-message loading', 'SHANEBRAIN');
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/mega/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: msg,
+                history: conversationHistory.slice(-20),
+                session_id: SESSION_ID,
+            }),
+        });
+
+        const data = await resp.json();
+        thinkingEl.remove();
+
+        if (data.response) {
+            addChatMessage(data.response, 'ai-message', 'SHANEBRAIN');
+            conversationHistory.push({ role: 'user', content: msg });
+            conversationHistory.push({ role: 'assistant', content: data.response });
+            // Weaviate save now handled server-side
+        } else {
+            addChatMessage('No response from model.', 'system-message', 'SYSTEM');
+        }
+    } catch (e) {
+        thinkingEl.remove();
+        addChatMessage('Connection error: ' + e.message, 'system-message', 'SYSTEM');
+    }
+}
+
+function addChatMessage(text, cls, sender) {
+    const win = document.getElementById('chat-window');
+    const div = document.createElement('div');
+    div.className = `message ${cls}`;
+    div.innerHTML = `<span class="msg-sender">${sender}</span><span class="msg-text">${formatContent(text)}</span>`;
+    win.appendChild(div);
+    win.scrollTop = win.scrollHeight;
+    return div;
+}
+
+function formatContent(content) {
+    return content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+}
+
+async function saveChatToWeaviate(msg, response) {
+    // Now handled server-side via /api/chat — this function kept as no-op for compatibility
+}
+
+async function loadChatHistory() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/mega/chat/history`);
+        const data = await resp.json();
+        const history = data.history || [];
+        if (history.length === 0) return;
+
+        const win = document.getElementById('chat-window');
+        const divider = document.createElement('div');
+        divider.className = 'message system-message';
+        divider.innerHTML = '<span class="msg-sender">SYSTEM</span><span class="msg-text">— Recent memory loaded from Weaviate —</span>';
+        win.appendChild(divider);
+
+        // Seed conversationHistory for context (last 10 turns)
+        history.slice(-10).forEach(t => {
+            const role = t.role === 'assistant' ? 'assistant' : 'user';
+            conversationHistory.push({ role, content: t.message || '' });
+        });
+
+        // Show last 5 in the chat window so Shane sees what was recent
+        history.slice(-5).forEach(t => {
+            const isUser = t.role === 'user';
+            addChatMessage(
+                t.message || '',
+                isUser ? 'user-message faded' : 'ai-message faded',
+                isUser ? 'YOU (prev)' : 'SHANEBRAIN (prev)'
+            );
+        });
+        win.scrollTop = win.scrollHeight;
+    } catch (e) {
+        console.error('Failed to load chat history:', e);
+    }
+}
+
+// =============================================================================
+// CALENDAR — Google Calendar integration via backend
+// =============================================================================
+
+async function loadCalendar() {
+    const row = document.getElementById('calendar-row');
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/calendar`);
+        const data = await resp.json();
+
+        if (data.events && data.events.length > 0) {
+            row.innerHTML = data.events.slice(0, 5).map(ev => {
+                const time = ev.time ? `<span style="color:var(--neon-cyan)">${ev.time}</span> ` : '';
+                return `<span class="cal-event">${time}${ev.title}</span>`;
+            }).join('');
+        } else {
+            row.innerHTML = '<span class="cal-event" style="color:var(--text-secondary)">No events next 3 days</span>';
+        }
+    } catch (e) {
+        console.error('Calendar error:', e);
+        row.innerHTML = '<span class="cal-event" style="color:var(--text-secondary)">Calendar offline</span>';
+    }
+}
+
+// =============================================================================
+// EMAIL INBOX — Gmail integration via backend
+// =============================================================================
+
+async function loadEmails() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/emails`);
+        const data = await resp.json();
+        const list = document.getElementById('email-list');
+        const countEl = document.getElementById('email-count');
+        const statusEl = document.getElementById('email-status');
+
+        if (data.emails && data.emails.length > 0) {
+            list.innerHTML = data.emails.slice(0, 8).map(em => {
+                const cls = em.read ? '' : 'unread';
+                const impCls = em.important ? ' important' : '';
+                return `<div class="email-item ${cls}${impCls}">
+                    <span class="email-time">${em.date || ''} ${em.time || ''}</span>
+                    <div class="email-from">${escapeHtml(em.from || 'Unknown')}</div>
+                    <div class="email-subject">${escapeHtml(em.subject || '(no subject)')}</div>
+                </div>`;
+            }).join('');
+            countEl.textContent = `${data.unreadCount || 0} unread`;
+            if (statusEl) statusEl.classList.add('online');
+        } else {
+            list.innerHTML = '<div class="email-placeholder">No emails to show</div>';
+            countEl.textContent = '0';
+        }
+
+        // Janitor stats
+        const j = data.janitor || {};
+        const jCleanedEl = document.getElementById('janitor-cleaned');
+        const jLastEl = document.getElementById('janitor-last');
+        if (jCleanedEl) jCleanedEl.textContent = `${j.janitor_total_cleaned || 0} cleaned`;
+        if (jLastEl && j.janitor_last_run) {
+            const ago = Math.round((Date.now() - new Date(j.janitor_last_run)) / 60000);
+            jLastEl.textContent = ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+        }
+    } catch (e) {
+        console.error('Email error:', e);
+        const list = document.getElementById('email-list');
+        if (list) list.innerHTML = '<div class="email-placeholder">Email service offline</div>';
+    }
+}
+
+function refreshEmails() {
+    document.getElementById('email-list').innerHTML =
+        '<div class="email-placeholder">Refreshing...</div>';
+    loadEmails();
+}
+
+async function loadEmailResponder() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/email-responder`);
+        const d = await resp.json();
+        const draftEl  = document.getElementById('responder-drafted');
+        const dotEl    = document.getElementById('responder-dot');
+        const lastEl   = document.getElementById('responder-last');
+        if (!draftEl) return;
+        draftEl.textContent = `${d.responder_total_drafted || 0} drafts`;
+        if (d.responder_last_run) {
+            const ago = Math.round((Date.now() - new Date(d.responder_last_run)) / 60000);
+            const label = ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+            lastEl.textContent = label;
+            dotEl.classList.add('responder-dot-active');
+        } else {
+            lastEl.textContent = 'never run';
+        }
+    } catch(e) { /* silent */ }
+}
+
+// =============================================================================
+// AUDIO — Brown Noise (Web Audio API) + Jazz Radio (SomaFM)
+// =============================================================================
+
+function toggleBrownNoise() {
+    if (brownNoisePlaying) {
+        stopBrownNoise();
+    } else {
+        startBrownNoise();
+    }
+}
+
+function startBrownNoise() {
+    if (!brownNoiseCtx) {
+        brownNoiseCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    // Create brown noise via ScriptProcessor
+    const bufferSize = 4096;
+    brownNoiseNode = brownNoiseCtx.createScriptProcessor(bufferSize, 1, 1);
+    brownNoiseGain = brownNoiseCtx.createGain();
+    brownNoiseGain.gain.value = globalVolume;
+
+    let lastOut = 0;
+    brownNoiseNode.onaudioprocess = (e) => {
+        const output = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            lastOut = (lastOut + (0.02 * white)) / 1.02;
+            output[i] = lastOut * 3.5; // Amplify
+        }
+    };
+
+    brownNoiseNode.connect(brownNoiseGain);
+    brownNoiseGain.connect(brownNoiseCtx.destination);
+
+    brownNoisePlaying = true;
+    document.getElementById('btn-brown').classList.add('active');
+}
+
+function stopBrownNoise() {
+    if (brownNoiseNode) {
+        brownNoiseNode.disconnect();
+        brownNoiseNode = null;
+    }
+    if (brownNoiseGain) {
+        brownNoiseGain.disconnect();
+        brownNoiseGain = null;
+    }
+    brownNoisePlaying = false;
+    document.getElementById('btn-brown').classList.remove('active');
+}
+
+function toggleJazz() {
+    if (jazzPlaying) {
+        stopJazz();
+    } else {
+        startJazz();
+    }
+}
+
+function startJazz() {
+    if (!jazzAudio) {
+        jazzAudio = new Audio(CONFIG.jazzStreamUrl);
+        jazzAudio.crossOrigin = 'anonymous';
+    }
+    jazzAudio.volume = globalVolume;
+    jazzAudio.play().catch(e => console.error('Jazz stream error:', e));
+    jazzPlaying = true;
+    document.getElementById('btn-jazz').classList.add('active');
+}
+
+function stopJazz() {
+    if (jazzAudio) {
+        jazzAudio.pause();
+        jazzAudio.currentTime = 0;
+    }
+    jazzPlaying = false;
+    document.getElementById('btn-jazz').classList.remove('active');
+}
+
+function setVolume(val) {
+    globalVolume = val / 100;
+    if (brownNoiseGain) brownNoiseGain.gain.value = globalVolume;
+    if (jazzAudio) jazzAudio.volume = globalVolume;
+}
+
+// =============================================================================
+// ECOSYSTEM MIND MAP — Full Interactive D3.js Force-Directed Graph
+// =============================================================================
+
+let mmSvg, mmSimulation, mmZoom, mmG;
+
+const MM_COLORS = {
+    core:     '#00fff9',  // cyan
+    bots:     '#ff00ff',  // magenta
+    services: '#39ff14',  // green
+    repos:    '#ffd700',  // gold
+    data:     '#bc13fe',  // purple
+    family:   '#ff2a6d',  // pink
+    hardware: '#ff6a00',  // orange
+    external: '#00aaff',  // blue
+};
+
+// Live system state cache — updated every 15s
+let _mmLiveState = { services: {}, bots: {}, cluster: {}, knowledge: 0, mega_iq: 0 };
+let _mmPulseNodes = new Set(); // nodes that fired recently
+
+async function refreshMindmapLiveState() {
+    try {
+        const [health, brain, cluster] = await Promise.all([
+            fetch(`${CONFIG.apiBase}/api/health`).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch(`${CONFIG.apiBase}/api/mega-brain`).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch(`${CONFIG.apiBase}/api/cluster`).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]);
+
+        if (health?.services) {
+            health.services.forEach(s => { _mmLiveState.services[s.name] = s.status; });
+        }
+        if (brain?.bots) {
+            brain.bots.forEach(b => { _mmLiveState.bots[b.name] = b.status; });
+            _mmLiveState.mega_iq  = brain.mega_iq || 0;
+            _mmLiveState.training = brain.training_count || 0;
+            _mmLiveState.memory   = brain.memory_count || 0;
+            // Mark zone nodes as firing based on zone_activity
+            const za = brain.zone_activity || {};
+            Object.entries(za).forEach(([z, count]) => { if (count > 0) _mmPulseNodes.add('mega-' + z); });
+        }
+        if (cluster?.data?.nodes) {
+            cluster.data.nodes.forEach(n => { _mmLiveState.cluster[n.name] = n.online; });
+        }
+        // Push pulses to the mindmap
+        if (mmG) pulseMindmapNodes();
+    } catch (e) { /* silent */ }
+}
+
+function pulseMindmapNodes() {
+    _mmPulseNodes.forEach(id => {
+        mmG?.selectAll('.mm-node').filter(d => d.id === id)
+            .select('circle:first-child')
+            .transition().duration(400)
+            .attr('r', d => d.r + 14).attr('stroke-opacity', 0.9)
+            .transition().duration(600)
+            .attr('r', d => d.r + 4).attr('stroke-opacity', 0.2);
+    });
+    _mmPulseNodes.clear();
+}
+
+function getMindmapNodeState(id) {
+    // Returns: 'hot' | 'active' | 'idle' | 'offline'
+    const svc = _mmLiveState.services;
+    const bots = _mmLiveState.bots;
+    const cluster = _mmLiveState.cluster;
+    const map = {
+        'ollama': svc['ollama'] === 'active' ? 'active' : 'idle',
+        'weaviate': svc['weaviate'] === 'ok' || svc['weaviate'] === 'active' ? 'active' : 'idle',
+        'gateway': svc['angel-cloud-gateway'] === 'active' ? 'active' : 'idle',
+        'mcpserver': svc['shanebrain-mcp'] === 'active' ? 'active' : 'idle',
+        'dashboard': 'active', // we're running
+        'discordbot': svc['shanebrain-discord'] === 'active' ? 'hot' : 'idle',
+        'socialbot': svc['shanebrain-social'] === 'active' ? 'active' : 'idle',
+        'arcadebot': svc['shanebrain-arcade'] === 'active' ? 'active' : 'idle',
+        'pulsar00100': cluster['Pulsar00100'] ? 'active' : 'offline',
+        'bullfrog': cluster['Bullfrog-Max-R2D2'] ? 'active' : 'offline',
+        'jaxton': cluster['Jaxton-Laptop'] ? 'active' : 'offline',
+        'mega-brain': Object.values(bots).filter(s => s === 'ACTIVE').length > 12 ? 'hot' : 'active',
+        'mega-brain-zone': 'active',
+        'memory': _mmLiveState.memory > 10 ? 'active' : 'idle',
+        'training': _mmLiveState.training > 6 ? 'active' : 'idle',
+    };
+    return map[id] || 'idle';
+}
+
+function getMindmapData() {
+    const nodes = [
+        // ── CORE HUB ──
+        { id: 'shanebrain', label: 'SHANEBRAIN', group: 'core', r: 28, desc: 'Central AI orchestrator — the brain of everything', icon: '🧠' },
+
+        // ── HARDWARE ──
+        { id: 'pi5', label: 'Pi 5', group: 'hardware', r: 22, desc: 'Raspberry Pi 5, 16GB RAM, Pironman 5-MAX case' },
+        { id: 'raid', label: 'RAID 1\n2x2TB NVMe', group: 'hardware', r: 16, desc: 'Dual WD Blue SN5000 NVMe in RAID 1 at /mnt/shanebrain-raid/' },
+        { id: 'ext8tb', label: '8TB External', group: 'hardware', r: 14, desc: 'Angel Cloud backup at /media/shane/ANGEL_CLOUD (NTFS)' },
+        { id: 'tailscale', label: 'TAILSCALE', group: 'hardware', r: 14, desc: 'VPN mesh — 100.67.120.6' },
+
+        // ── SERVICES (Running on Pi) ──
+        { id: 'ollama', label: 'OLLAMA', group: 'services', r: 20, desc: 'Local LLM engine — port 11434. Models: shanebrain-3b, llama3.2:3b, nomic-embed-text' },
+        { id: 'weaviate', label: 'WEAVIATE', group: 'services', r: 20, desc: 'Vector DB — port 8080/50051. 17 collections, 251 objects, RAG + memory' },
+        { id: 'openwebui', label: 'OPEN\nWEBUI', group: 'services', r: 15, desc: 'Chat interface — port 3000' },
+        { id: 'portainer', label: 'PORTAINER', group: 'services', r: 13, desc: 'Docker management — port 9000' },
+        { id: 'mcpserver', label: 'MCP\nSERVER', group: 'services', r: 16, desc: 'ShaneBrain MCP — port 8100, 20 tools via SSE' },
+        { id: 'gateway', label: 'ANGEL CLOUD\nGATEWAY', group: 'services', r: 18, desc: 'FastAPI — port 4200. Registration, login, angel progression, leaderboard' },
+        { id: 'dashboard', label: 'MEGA\nDASHBOARD', group: 'services', r: 16, desc: 'This dashboard — port 8300. 3D command center' },
+        { id: 'glances', label: 'GLANCES', group: 'services', r: 12, desc: 'System monitor — port 61208' },
+
+        // ── BOTS & AGENTS ──
+        { id: 'discordbot', label: 'DISCORD\nBOT', group: 'bots', r: 17, desc: 'ShaneBrain Discord v5.4 — RAG + learning + Weaviate harvesting' },
+        { id: 'arcadebot', label: 'ANGEL\nARCADE', group: 'bots', r: 15, desc: 'Discord economy/casino bot — revenue generation' },
+        { id: 'socialbot', label: 'SOCIAL\nBOT', group: 'bots', r: 15, desc: 'Facebook bot — posting, comment harvesting, friend profiling' },
+        { id: 'claudecode', label: 'CLAUDE\nCODE', group: 'bots', r: 16, desc: 'Dev partner — building this entire ecosystem right now' },
+        { id: 'pulsar', label: 'PULSAR\nSENTINEL', group: 'bots', r: 16, desc: 'Post-quantum security framework with full UI' },
+        { id: 'githubpoller', label: 'GITHUB\nPOLLER', group: 'bots', r: 13, desc: 'Polls GitHub commits/PRs every 15 min, awards points' },
+
+        // ── DATA & COLLECTIONS ──
+        { id: 'legacyknowledge', label: 'Legacy\nKnowledge', group: 'data', r: 14, desc: '153 objects — the core knowledge base' },
+        { id: 'conversations', label: 'Conversations', group: 'data', r: 13, desc: '61 objects — chat history with context' },
+        { id: 'friendprofiles', label: 'Friend\nProfiles', group: 'data', r: 12, desc: '5 profiles — living relationship data' },
+        { id: 'ragmd', label: 'RAG.md', group: 'data', r: 14, desc: 'Source of truth — who Shane is, personality, knowledge' },
+        { id: 'constitution', label: 'CONSTITUTION', group: 'data', r: 15, desc: 'Single source of truth governing every project and decision' },
+
+        // ── REPOSITORIES ──
+        { id: 'repo-core', label: 'shanebrain-core', group: 'repos', r: 14, desc: 'Central repo — AI, bots, gateway, social' },
+        { id: 'repo-pulsar', label: 'pulsar_sentinel', group: 'repos', r: 12, desc: 'Post-quantum security framework' },
+        { id: 'repo-loudon', label: 'loudon-desarro', group: 'repos', r: 12, desc: '50,000 SF athletic complex 3D viz' },
+        { id: 'repo-trainer', label: 'AI-Trainer-MAX', group: 'repos', r: 12, desc: 'Modular AI training — 19 modules, 3 phases' },
+        { id: 'repo-halo', label: 'HaloFinance', group: 'repos', r: 12, desc: 'Financial tools and tracking' },
+        { id: 'repo-angel', label: 'angel-cloud', group: 'repos', r: 12, desc: 'Angel Cloud frontend' },
+        { id: 'repo-roblox', label: 'angel-cloud\n-roblox', group: 'repos', r: 11, desc: 'Angel Cloud Roblox integration' },
+        { id: 'repo-n8n', label: 'N8N', group: 'repos', r: 11, desc: 'Workflow automation' },
+        { id: 'repo-trojan', label: 'TrojanHorse\nArena', group: 'repos', r: 11, desc: 'Competitive AI arena' },
+        { id: 'repo-book', label: 'Book Launch\nPlaybook', group: 'repos', r: 11, desc: 'Book launch strategy' },
+        { id: 'repo-noir', label: 'Noir Detective', group: 'repos', r: 11, desc: 'Creative writing process' },
+        { id: 'repo-thoughttree', label: 'Thought Tree', group: 'repos', r: 11, desc: 'Idea mapping system' },
+        { id: 'repo-sbmgmt', label: 'SB-Mgmt-OS', group: 'repos', r: 12, desc: 'ShaneBrain management operating system' },
+        { id: 'repo-index', label: 'Index', group: 'repos', r: 10, desc: 'Master repo index' },
+        { id: 'repo-gemini', label: 'Gemini\nSidekick', group: 'repos', r: 11, desc: 'Gemini integration' },
+        { id: 'repo-bgkpjr', label: 'BGKPJR\nSims', group: 'repos', r: 11, desc: 'Core simulations' },
+
+        // ── FAMILY / MISSION ──
+        { id: 'family', label: 'FAMILY', group: 'family', r: 20, desc: 'The mission: digital legacy for every family' },
+        { id: 'srm', label: 'SRM\nDISPATCH', group: 'family', r: 16, desc: 'Day job — dump truck dispatch, Meridianville AL' },
+        { id: 'sobriety', label: 'SOBRIETY', group: 'family', r: 15, desc: 'Since Nov 27, 2023 — every day is a victory' },
+        { id: 'mission800m', label: '800M\nUSERS', group: 'family', r: 17, desc: '800 million Windows users losing security updates — ShaneBrain proves affordable local AI works' },
+        { id: 'angelecosystem', label: 'ANGEL\nECOSYSTEM', group: 'family', r: 16, desc: 'Mental wellness + security + digital legacy for every family' },
+    ];
+
+    const links = [
+        // Core connections
+        { source: 'shanebrain', target: 'pi5', strength: 1 },
+        { source: 'pi5', target: 'raid', strength: 0.8 },
+        { source: 'pi5', target: 'ext8tb', strength: 0.5 },
+        { source: 'pi5', target: 'tailscale', strength: 0.6 },
+
+        // Services to Pi
+        { source: 'pi5', target: 'ollama', strength: 0.8 },
+        { source: 'pi5', target: 'weaviate', strength: 0.8 },
+        { source: 'pi5', target: 'openwebui', strength: 0.6 },
+        { source: 'pi5', target: 'portainer', strength: 0.5 },
+        { source: 'pi5', target: 'mcpserver', strength: 0.7 },
+        { source: 'pi5', target: 'gateway', strength: 0.7 },
+        { source: 'pi5', target: 'dashboard', strength: 0.6 },
+        { source: 'pi5', target: 'glances', strength: 0.4 },
+
+        // ShaneBrain hub connections
+        { source: 'shanebrain', target: 'ollama', strength: 0.9 },
+        { source: 'shanebrain', target: 'weaviate', strength: 0.9 },
+        { source: 'shanebrain', target: 'mcpserver', strength: 0.8 },
+        { source: 'shanebrain', target: 'ragmd', strength: 0.9 },
+        { source: 'shanebrain', target: 'constitution', strength: 0.8 },
+        { source: 'shanebrain', target: 'dashboard', strength: 0.7 },
+
+        // Bots to ShaneBrain
+        { source: 'shanebrain', target: 'discordbot', strength: 0.8 },
+        { source: 'shanebrain', target: 'arcadebot', strength: 0.6 },
+        { source: 'shanebrain', target: 'socialbot', strength: 0.7 },
+        { source: 'shanebrain', target: 'claudecode', strength: 0.7 },
+        { source: 'shanebrain', target: 'pulsar', strength: 0.6 },
+
+        // Bot-service connections
+        { source: 'discordbot', target: 'weaviate', strength: 0.7 },
+        { source: 'discordbot', target: 'ollama', strength: 0.7 },
+        { source: 'socialbot', target: 'weaviate', strength: 0.6 },
+        { source: 'arcadebot', target: 'weaviate', strength: 0.5 },
+        { source: 'openwebui', target: 'ollama', strength: 0.8 },
+        { source: 'mcpserver', target: 'weaviate', strength: 0.8 },
+        { source: 'mcpserver', target: 'ollama', strength: 0.7 },
+        { source: 'gateway', target: 'weaviate', strength: 0.6 },
+        { source: 'gateway', target: 'githubpoller', strength: 0.5 },
+        { source: 'dashboard', target: 'ollama', strength: 0.6 },
+        { source: 'dashboard', target: 'weaviate', strength: 0.6 },
+
+        // Data to weaviate
+        { source: 'weaviate', target: 'legacyknowledge', strength: 0.7 },
+        { source: 'weaviate', target: 'conversations', strength: 0.7 },
+        { source: 'weaviate', target: 'friendprofiles', strength: 0.6 },
+        { source: 'raid', target: 'ragmd', strength: 0.5 },
+
+        // Repos to projects
+        { source: 'repo-core', target: 'shanebrain', strength: 0.6 },
+        { source: 'repo-pulsar', target: 'pulsar', strength: 0.6 },
+        { source: 'repo-trainer', target: 'shanebrain', strength: 0.4 },
+        { source: 'repo-angel', target: 'gateway', strength: 0.5 },
+        { source: 'repo-halo', target: 'shanebrain', strength: 0.3 },
+        { source: 'repo-sbmgmt', target: 'shanebrain', strength: 0.4 },
+        { source: 'repo-roblox', target: 'repo-angel', strength: 0.4 },
+
+        // Family connections
+        { source: 'shanebrain', target: 'family', strength: 0.8 },
+        { source: 'family', target: 'sobriety', strength: 0.7 },
+        { source: 'shanebrain', target: 'srm', strength: 0.5 },
+        { source: 'family', target: 'mission800m', strength: 0.6 },
+        { source: 'mission800m', target: 'angelecosystem', strength: 0.7 },
+        { source: 'angelecosystem', target: 'gateway', strength: 0.5 },
+
+        // Constitution governs all
+        { source: 'constitution', target: 'repo-core', strength: 0.3 },
+        { source: 'constitution', target: 'repo-pulsar', strength: 0.3 },
+        { source: 'constitution', target: 'repo-trainer', strength: 0.3 },
+    ];
+
+    return { nodes, links };
+}
+
+// =============================================================================
+// QUANTUM ECOSYSTEM — 3D Three.js Interactive Network
+// =============================================================================
+
+let _eco3dScene, _eco3dCamera, _eco3dRenderer, _eco3dGroup;
+let _eco3dFsScene, _eco3dFsCamera, _eco3dFsRenderer, _eco3dFsGroup;
+let _eco3dNodeMeshes = [];
+let _eco3dFsNodeMeshes = [];
+let _eco3dFullOpen = false;
+let _eco3dFilter = 'all';
+
+const ECO_COLORS = {
+    core:     0x00fff9,
+    bots:     0xff00ff,
+    services: 0x39ff14,
+    repos:    0xffd700,
+    data:     0xbc13fe,
+    family:   0xff2a6d,
+    hardware: 0xff6a00,
+    external: 0x00aaff,
+};
+
+function initEco3D(canvas, isFull) {
+    if (!canvas) return;
+
+    const w = isFull ? window.innerWidth : canvas.clientWidth || 600;
+    const h = isFull ? (window.innerHeight - 56) : (canvas.clientHeight || 350);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
+    camera.position.set(0, 0, isFull ? 28 : 22);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    if (isFull) {
+        _eco3dFsScene = scene; _eco3dFsCamera = camera;
+        _eco3dFsRenderer = renderer; _eco3dFsGroup = group;
+    } else {
+        _eco3dScene = scene; _eco3dCamera = camera;
+        _eco3dRenderer = renderer; _eco3dGroup = group;
+    }
+
+    // === BACKGROUND PARTICLES (quantum field) ===
+    const bgCount = isFull ? 600 : 200;
+    const bgGeo = new THREE.BufferGeometry();
+    const bgPos = new Float32Array(bgCount * 3);
+    for (let i = 0; i < bgCount; i++) {
+        bgPos[i*3] = (Math.random() - 0.5) * 80;
+        bgPos[i*3+1] = (Math.random() - 0.5) * 80;
+        bgPos[i*3+2] = (Math.random() - 0.5) * 80;
+    }
+    bgGeo.setAttribute('position', new THREE.Float32BufferAttribute(bgPos, 3));
+    const bgMat = new THREE.PointsMaterial({ color: 0x00fff9, size: 0.08, transparent: true, opacity: 0.25 });
+    const bgStars = new THREE.Points(bgGeo, bgMat);
+    bgStars.name = 'quantum-field';
+    scene.add(bgStars);
+
+    // === BUILD NODES & LINKS ===
+    const data = getMindmapData();
+    const nodeMeshes = _buildEco3DNodes(group, data, isFull);
+    _buildEco3DLinks(group, data, nodeMeshes, isFull);
+
+    if (isFull) _eco3dFsNodeMeshes = nodeMeshes;
+    else _eco3dNodeMeshes = nodeMeshes;
+
+    // === LEGEND ===
+    const legend = document.getElementById('mindmap-legend');
+    if (legend && !isFull) {
+        const groups = [
+            { key: 'core', label: 'CORE' }, { key: 'hardware', label: 'HARDWARE' },
+            { key: 'services', label: 'SERVICES' }, { key: 'bots', label: 'BOTS' },
+            { key: 'data', label: 'DATA' }, { key: 'repos', label: 'REPOS' },
+            { key: 'family', label: 'FAMILY' },
+        ];
+        legend.innerHTML = groups.map(g => {
+            const hex = '#' + ECO_COLORS[g.key].toString(16).padStart(6, '0');
+            return `<div class="legend-item"><span class="legend-dot" style="background:${hex};box-shadow:0 0 6px ${hex}"></span>${g.label}</div>`;
+        }).join('');
+    }
+
+    // === INTERACTION — drag to orbit ===
+    let isDragging = false, prevX = 0, prevY = 0;
+    canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+    canvas.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mouseleave', () => isDragging = false);
+    canvas.addEventListener('mousemove', e => {
+        if (isDragging) {
+            group.rotation.y += (e.clientX - prevX) * 0.005;
+            group.rotation.x += (e.clientY - prevY) * 0.005;
+            prevX = e.clientX; prevY = e.clientY;
+        }
+        if (isFull) _eco3dHandleHover(e, canvas, camera, nodeMeshes);
+    });
+    // Scroll to zoom
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        camera.position.z = Math.max(5, Math.min(60, camera.position.z + e.deltaY * 0.03));
+    }, { passive: false });
+    // Touch support
+    let lastTouchDist = 0;
+    canvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; }
+        if (e.touches.length === 2) { lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+    });
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+            group.rotation.y += (e.touches[0].clientX - prevX) * 0.005;
+            group.rotation.x += (e.touches[0].clientY - prevY) * 0.005;
+            prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+        }
+        if (e.touches.length === 2) {
+            const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            camera.position.z = Math.max(5, Math.min(60, camera.position.z - (dist - lastTouchDist) * 0.05));
+            lastTouchDist = dist;
+        }
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => isDragging = false);
+
+    // === ANIMATION LOOP ===
+    function animate() {
+        requestAnimationFrame(animate);
+        const t = Date.now() * 0.001;
+        if (!isDragging) group.rotation.y += 0.001;
+
+        // Pulse quantum field
+        bgStars.rotation.y -= 0.0003;
+        bgStars.rotation.x += 0.0001;
+
+        // Pulse nodes
+        nodeMeshes.forEach((mesh, i) => {
+            if (mesh.userData.group === 'core') {
+                const s = 1 + Math.sin(t * 2 + i) * 0.15;
+                mesh.scale.set(s, s, s);
+            }
+            // Glow pulse
+            const glow = mesh.children[0];
+            if (glow) glow.material.opacity = 0.12 + Math.sin(t * 1.5 + i * 0.5) * 0.08;
+        });
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize
+    if (isFull) {
+        const onResize = () => {
+            const nw = window.innerWidth;
+            const nh = window.innerHeight - 56;
+            camera.aspect = nw / nh;
+            camera.updateProjectionMatrix();
+            renderer.setSize(nw, nh);
+        };
+        window.addEventListener('resize', onResize);
+    }
+}
+
+function _buildEco3DNodes(group, data, isFull) {
+    const meshes = [];
+    const total = data.nodes.length;
+    const spread = isFull ? 14 : 10;
+
+    // Position nodes in 3D space using golden spiral sphere + group clustering
+    const groupCenters = {};
+    const groupList = ['core', 'hardware', 'services', 'bots', 'data', 'repos', 'family'];
+    groupList.forEach((g, gi) => {
+        const angle = (gi / groupList.length) * Math.PI * 2;
+        const clusterR = spread * 0.55;
+        groupCenters[g] = {
+            x: Math.cos(angle) * clusterR,
+            y: (Math.sin(angle * 2.1) * clusterR * 0.3),
+            z: Math.sin(angle) * clusterR,
+        };
+    });
+    // Core at center
+    groupCenters['core'] = { x: 0, y: 0, z: 0 };
+
+    const groupCounters = {};
+
+    data.nodes.forEach((node, i) => {
+        const color = ECO_COLORS[node.group] || 0xffffff;
+        const size = (node.r || 12) * (isFull ? 0.04 : 0.03);
+        const gc = groupCenters[node.group] || { x: 0, y: 0, z: 0 };
+
+        // Offset within group cluster
+        if (!groupCounters[node.group]) groupCounters[node.group] = 0;
+        const ci = groupCounters[node.group]++;
+        const nodesInGroup = data.nodes.filter(n => n.group === node.group).length;
+        const subAngle = (ci / Math.max(1, nodesInGroup)) * Math.PI * 2;
+        const subR = node.group === 'core' ? 0 : (2 + ci * 0.3);
+
+        const x = gc.x + Math.cos(subAngle) * subR + (Math.random() - 0.5) * 1.5;
+        const y = gc.y + (Math.random() - 0.5) * 3;
+        const z = gc.z + Math.sin(subAngle) * subR + (Math.random() - 0.5) * 1.5;
+
+        // Node sphere
+        const geo = new THREE.SphereGeometry(size, 12, 10);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.userData = { ...node, index: i };
+
+        // Glow halo
+        const glowGeo = new THREE.SphereGeometry(size * 2.5, 8, 8);
+        const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12 });
+        mesh.add(new THREE.Mesh(glowGeo, glowMat));
+
+        // Label sprite
+        if (isFull || node.r >= 16) {
+            const label = _makeTextSprite(node.label.replace(/\n/g, ' '), color);
+            label.position.set(0, size * 3 + 0.3, 0);
+            label.scale.set(2, 0.5, 1);
+            mesh.add(label);
+        }
+
+        group.add(mesh);
+        meshes.push(mesh);
+    });
+
+    return meshes;
+}
+
+function _buildEco3DLinks(group, data, nodeMeshes, isFull) {
+    const nodeMap = {};
+    data.nodes.forEach((n, i) => nodeMap[n.id] = i);
+
+    const positions = [];
+    const colors = [];
+
+    data.links.forEach(link => {
+        const si = nodeMap[link.source] ?? nodeMap[link.source?.id];
+        const ti = nodeMap[link.target] ?? nodeMap[link.target?.id];
+        if (si === undefined || ti === undefined) return;
+
+        const sm = nodeMeshes[si];
+        const tm = nodeMeshes[ti];
+        if (!sm || !tm) return;
+
+        positions.push(sm.position.x, sm.position.y, sm.position.z);
+        positions.push(tm.position.x, tm.position.y, tm.position.z);
+
+        const strength = link.strength || 0.3;
+        const alpha = strength * 0.6;
+        // Color based on source node group
+        const c = new THREE.Color(ECO_COLORS[data.nodes[si]?.group] || 0x00fff9);
+        colors.push(c.r, c.g, c.b);
+        colors.push(c.r * 0.5, c.g * 0.5, c.b * 0.5);
+    });
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.25 });
+    const lines = new THREE.LineSegments(lineGeo, lineMat);
+    lines.name = 'eco-links';
+    group.add(lines);
+
+    // === QUANTUM ENTANGLEMENT PARTICLES along links ===
+    const particleCount = isFull ? 300 : 80;
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(particleCount * 3);
+    const pCol = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+        // Pick a random link and position particle along it
+        const li = Math.floor(Math.random() * (positions.length / 6));
+        const t = Math.random();
+        const base = li * 6;
+        if (base + 5 < positions.length) {
+            pPos[i*3]   = positions[base]   + (positions[base+3] - positions[base])   * t + (Math.random()-0.5)*0.3;
+            pPos[i*3+1] = positions[base+1] + (positions[base+4] - positions[base+1]) * t + (Math.random()-0.5)*0.3;
+            pPos[i*3+2] = positions[base+2] + (positions[base+5] - positions[base+2]) * t + (Math.random()-0.5)*0.3;
+        }
+        pCol[i*3] = 0; pCol[i*3+1] = 1; pCol[i*3+2] = 0.98;
+    }
+    pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+    pGeo.setAttribute('color', new THREE.Float32BufferAttribute(pCol, 3));
+    const pMat = new THREE.PointsMaterial({ size: isFull ? 0.06 : 0.04, vertexColors: true, transparent: true, opacity: 0.5 });
+    const entanglementParticles = new THREE.Points(pGeo, pMat);
+    entanglementParticles.name = 'entanglement';
+    group.add(entanglementParticles);
+}
+
+function _eco3dHandleHover(e, canvas, camera, nodeMeshes) {
+    const rect = canvas.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodeMeshes, false);
+
+    const tooltip = document.getElementById('eco3d-tooltip');
+    if (intersects.length > 0) {
+        const d = intersects[0].object.userData;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 16) + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+        const hex = '#' + (ECO_COLORS[d.group] || 0xffffff).toString(16).padStart(6, '0');
+        tooltip.innerHTML = `<div style="color:${hex};font-family:Orbitron;font-size:0.75rem;margin-bottom:4px">${(d.label||'').replace(/\n/g,' ')}</div><div style="color:#aaa">${d.desc || ''}</div><div style="color:#666;margin-top:3px;font-size:0.55rem">${d.group?.toUpperCase()}</div>`;
+    } else {
+        tooltip.style.display = 'none';
+    }
+}
+
+function openEco3DFull() {
+    const overlay = document.getElementById('eco3d-fullscreen');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _eco3dFullOpen = true;
+
+    if (!_eco3dFsRenderer) {
+        const canvas = document.getElementById('eco3d-canvas-fs');
+        initEco3D(canvas, true);
+    }
+}
+
+function closeEco3DFull() {
+    document.getElementById('eco3d-fullscreen').style.display = 'none';
+    document.body.style.overflow = '';
+    _eco3dFullOpen = false;
+}
+
+function filterEco3D(group) {
+    _eco3dFilter = group;
+    const meshes = _eco3dFullOpen ? _eco3dFsNodeMeshes : _eco3dNodeMeshes;
+    meshes.forEach(m => {
+        if (group === 'all' || m.userData.group === group) {
+            m.visible = true;
+        } else {
+            m.visible = false;
+        }
+    });
+    // Also filter links
+    const g = _eco3dFullOpen ? _eco3dFsGroup : _eco3dGroup;
+    const links = g?.getObjectByName('eco-links');
+    if (links) links.material.opacity = group === 'all' ? 0.25 : 0.1;
+}
+
+// Update ESC handler
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _eco3dFullOpen) closeEco3DFull();
+});
+
+function initMindMap() {
+    const svg = d3.select('#mindmap-svg');
+    if (svg.empty()) return;
+
+    const container = svg.node().parentElement;
+    const width = container.clientWidth;
+    const height = container.clientHeight || 500;
+
+    svg.attr('viewBox', [0, 0, width, height]);
+
+    // Zoom behavior
+    mmZoom = d3.zoom()
+        .scaleExtent([0.3, 4])
+        .on('zoom', (event) => mmG.attr('transform', event.transform));
+
+    svg.call(mmZoom);
+
+    mmG = svg.append('g');
+    mmSvg = svg;
+
+    const data = getMindmapData();
+
+    // Build the legend
+    const legendEl = document.getElementById('mindmap-legend');
+    const groups = [
+        { key: 'core', label: 'CORE' },
+        { key: 'hardware', label: 'HARDWARE' },
+        { key: 'services', label: 'SERVICES' },
+        { key: 'bots', label: 'BOTS' },
+        { key: 'data', label: 'DATA' },
+        { key: 'repos', label: 'REPOS' },
+        { key: 'family', label: 'FAMILY' },
+    ];
+    legendEl.innerHTML = groups.map(g =>
+        `<div class="legend-item"><span class="legend-dot" style="background:${MM_COLORS[g.key]};box-shadow:0 0 6px ${MM_COLORS[g.key]}"></span>${g.label}</div>`
+    ).join('');
+
+    // Force simulation
+    mmSimulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id).distance(d => 80 / (d.strength || 0.5)).strength(d => d.strength || 0.3))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => d.r + 8))
+        .force('x', d3.forceX(width / 2).strength(0.05))
+        .force('y', d3.forceY(height / 2).strength(0.05));
+
+    // Gradient definitions for glow effects
+    const defs = svg.append('defs');
+
+    // Glow filter
+    const glow = defs.append('filter').attr('id', 'mm-glow');
+    glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+    const merge = glow.append('feMerge');
+    merge.append('feMergeNode').attr('in', 'coloredBlur');
+    merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+    // Links
+    const link = mmG.append('g')
+        .selectAll('line')
+        .data(data.links)
+        .join('line')
+        .attr('class', 'mm-link')
+        .attr('stroke', d => {
+            const sourceNode = data.nodes.find(n => n.id === (d.source.id || d.source));
+            return sourceNode ? MM_COLORS[sourceNode.group] || '#333' : '#333';
+        })
+        .attr('stroke-width', d => Math.max(0.5, (d.strength || 0.3) * 2));
+
+    // Node groups
+    const node = mmG.append('g')
+        .selectAll('g')
+        .data(data.nodes)
+        .join('g')
+        .attr('class', 'mm-node')
+        .call(d3.drag()
+            .on('start', mmDragStarted)
+            .on('drag', mmDragged)
+            .on('end', mmDragEnded));
+
+    // Outer glow circle
+    node.append('circle')
+        .attr('r', d => d.r + 4)
+        .attr('fill', 'none')
+        .attr('stroke', d => MM_COLORS[d.group] || '#00aaff')
+        .attr('stroke-width', 1)
+        .attr('stroke-opacity', 0.2)
+        .attr('filter', 'url(#mm-glow)');
+
+    // Main circle
+    node.append('circle')
+        .attr('r', d => d.r)
+        .attr('fill', d => {
+            const c = MM_COLORS[d.group] || '#00aaff';
+            return c + '22'; // Very transparent fill
+        })
+        .attr('stroke', d => MM_COLORS[d.group] || '#00aaff')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-opacity', 0.8);
+
+    // Labels
+    node.each(function(d) {
+        const g = d3.select(this);
+        const lines = d.label.split('\n');
+        const fontSize = d.r > 18 ? '0.55rem' : d.r > 13 ? '0.48rem' : '0.42rem';
+
+        lines.forEach((line, i) => {
+            const yOffset = (i - (lines.length - 1) / 2) * (d.r > 18 ? 12 : 10);
+            g.append('text')
+                .attr('class', 'mm-node-label')
+                .attr('dy', yOffset)
+                .attr('font-size', fontSize)
+                .attr('fill', MM_COLORS[d.group] || '#00aaff')
+                .text(line);
+        });
+    });
+
+    // Tooltip interactions
+    const tooltip = document.getElementById('mindmap-tooltip');
+
+    node.on('mouseover', function(event, d) {
+        // Highlight connected nodes
+        const connected = new Set();
+        connected.add(d.id);
+        data.links.forEach(l => {
+            const s = l.source.id || l.source;
+            const t = l.target.id || l.target;
+            if (s === d.id) connected.add(t);
+            if (t === d.id) connected.add(s);
+        });
+
+        node.style('opacity', n => connected.has(n.id) ? 1 : 0.15);
+        link.style('stroke-opacity', l => {
+            const s = l.source.id || l.source;
+            const t = l.target.id || l.target;
+            return (s === d.id || t === d.id) ? 0.6 : 0.03;
+        });
+
+        // Enlarge hovered node
+        d3.select(this).select('circle:nth-child(2)')
+            .transition().duration(200)
+            .attr('r', d.r * 1.15)
+            .attr('stroke-width', 2.5);
+
+        // Show tooltip
+        tooltip.innerHTML = `
+            <div class="tt-title">${d.label.replace(/\n/g, ' ')}</div>
+            <div class="tt-type">${d.group.toUpperCase()}</div>
+            <div class="tt-desc">${d.desc}</div>
+        `;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (event.offsetX + 15) + 'px';
+        tooltip.style.top = (event.offsetY - 10) + 'px';
+    })
+    .on('mousemove', function(event) {
+        tooltip.style.left = (event.offsetX + 15) + 'px';
+        tooltip.style.top = (event.offsetY - 10) + 'px';
+    })
+    .on('mouseout', function() {
+        node.style('opacity', 1);
+        link.style('stroke-opacity', 0.3);
+
+        d3.select(this).select('circle:nth-child(2)')
+            .transition().duration(200)
+            .attr('r', d => d.r)
+            .attr('stroke-width', 1.5);
+
+        tooltip.style.display = 'none';
+    });
+
+    // Tick
+    mmSimulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    // Core pulse
+    setInterval(() => {
+        mmG.selectAll('.mm-node').filter(d => d.id === 'shanebrain')
+            .select('circle:first-child')
+            .transition().duration(1000)
+            .attr('r', d => d.r + 10).attr('stroke-opacity', 0.6)
+            .transition().duration(800)
+            .attr('r', d => d.r + 4).attr('stroke-opacity', 0.2);
+    }, 3000);
+
+    // Live state refresh + node state coloring
+    const applyLiveColors = () => {
+        if (!mmG) return;
+        mmG.selectAll('.mm-node').each(function(d) {
+            const state = getMindmapNodeState(d.id);
+            const col = MM_COLORS[d.group] || '#00aaff';
+            const strokeW = state === 'hot' ? 3 : state === 'active' ? 2 : state === 'offline' ? 0.5 : 1.5;
+            const opacity = state === 'offline' ? 0.25 : 1;
+            d3.select(this).select('circle:nth-child(2)')
+                .attr('stroke-width', strokeW)
+                .attr('stroke-opacity', state === 'offline' ? 0.2 : 0.9)
+                .attr('fill', state === 'hot' ? col + '44' : state === 'active' ? col + '22' : col + '08');
+            d3.select(this).style('opacity', opacity);
+            // Hot nodes get extra glow pulse
+            if (state === 'hot') {
+                d3.select(this).select('circle:first-child')
+                    .attr('stroke-opacity', 0.5).attr('r', d.r + 8);
+            }
+        });
+        // Animate data pulses along active links
+        animateDataPulses();
+    };
+
+    refreshMindmapLiveState().then(applyLiveColors);
+    setInterval(() => refreshMindmapLiveState().then(applyLiveColors), 15000);
+}
+
+// Animated data pulse along a link
+function animateDataPulses() {
+    if (!mmG) return;
+    // Pick 2-3 random active links and send a pulse dot along them
+    const activeLinks = [];
+    mmG.selectAll('.mm-link').each(function(d) {
+        const sId = d.source.id || d.source;
+        const sState = getMindmapNodeState(sId);
+        if (sState === 'hot' || sState === 'active') activeLinks.push({ el: this, d });
+    });
+    const picks = activeLinks.sort(() => Math.random()-0.5).slice(0, 3);
+    picks.forEach(({ el, d }) => {
+        const parent = el.parentNode;
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const col = MM_COLORS[(d.source.group || 'core')] || '#00ffff';
+        dot.setAttribute('r', '2.5');
+        dot.setAttribute('fill', col);
+        dot.setAttribute('opacity', '0.9');
+        parent.appendChild(dot);
+        let t = 0;
+        const animate = () => {
+            t += 0.025;
+            if (t > 1) { dot.remove(); return; }
+            const x = d.source.x + (d.target.x - d.source.x) * t;
+            const y = d.source.y + (d.target.y - d.source.y) * t;
+            dot.setAttribute('cx', x);
+            dot.setAttribute('cy', y);
+            dot.setAttribute('opacity', t < 0.1 ? t*9 : t > 0.85 ? (1-t)*6.7 : 1);
+            requestAnimationFrame(animate);
+        };
+        setTimeout(() => requestAnimationFrame(animate), Math.random() * 2000);
+    });
+}
+
+function mmDragStarted(event, d) {
+    if (!event.active) mmSimulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function mmDragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
+
+function mmDragEnded(event, d) {
+    if (!event.active) mmSimulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+}
+
+function mindmapZoomIn() {
+    mmSvg.transition().duration(300).call(mmZoom.scaleBy, 1.4);
+}
+
+function mindmapZoomOut() {
+    mmSvg.transition().duration(300).call(mmZoom.scaleBy, 0.7);
+}
+
+function mindmapReset() {
+    mmSvg.transition().duration(500).call(mmZoom.transform, d3.zoomIdentity);
+    mmSimulation.alpha(0.8).restart();
+}
+
+function filterMindmap(group) {
+    if (!mmG) return;
+    if (group === 'all') {
+        mmG.selectAll('.mm-node').style('opacity', 1);
+        mmG.selectAll('.mm-link').style('stroke-opacity', 0.3);
+        return;
+    }
+
+    const data = getMindmapData();
+    const inGroup = new Set();
+    data.nodes.filter(n => n.group === group).forEach(n => inGroup.add(n.id));
+
+    // Also include connected nodes
+    data.links.forEach(l => {
+        const s = l.source.id || l.source;
+        const t = l.target.id || l.target;
+        if (inGroup.has(s)) inGroup.add(t);
+        if (inGroup.has(t)) inGroup.add(s);
+    });
+
+    mmG.selectAll('.mm-node').style('opacity', d => inGroup.has(d.id) ? 1 : 0.08);
+    mmG.selectAll('.mm-link').style('stroke-opacity', l => {
+        const s = l.source.id || l.source;
+        const t = l.target.id || l.target;
+        return (inGroup.has(s) && inGroup.has(t)) ? 0.4 : 0.02;
+    });
+}
+
+// ESC key handler for all fullscreen overlays (consolidated)
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (_eco3dFullOpen) closeEco3DFull();
+        if (document.getElementById('stars-fullscreen')?.style.display !== 'none') closeKnowledgeStarsFull();
+        if (document.getElementById('mindmap-fullscreen')?.style.display !== 'none') closeMindMapFull();
+    }
+});
+
+// =============================================================================
+// NETWORK STATUS, BUILD STATUS, VOICE DUMP
+// =============================================================================
+
+async function loadAchievements() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/achievements`);
+        const data = await resp.json();
+        const list = document.getElementById('achievements-list');
+        if (data.achievements && data.achievements.length > 0) {
+            list.innerHTML = data.achievements.map(a => `
+                <div class="achievement-card ${a.locked ? 'locked' : ''}">
+                    <div class="achievement-icon">${a.icon}</div>
+                    <div class="achievement-title">${a.title}</div>
+                    <div class="achievement-desc">${a.description}</div>
+                    ${a.progress ? `<div class="achievement-progress"><div class="achievement-progress-bar" style="width:${a.progress}%"></div></div>` : ''}
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Achievements error:', e);
+    }
+}
+
+async function loadNetworkStatus() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/network`);
+        const data = await resp.json();
+        const grid = document.getElementById('network-grid');
+        if (data.nodes) {
+            grid.innerHTML = data.nodes.map(n => `
+                <div class="network-node">
+                    <div class="network-node-header">
+                        <span class="health-dot ${n.online ? 'online' : 'offline'}"></span>
+                        <span class="network-node-name">${n.name}</span>
+                    </div>
+                    <div class="network-ip">${n.ip}</div>
+                    ${n.online ? `<div class="network-ping">${n.latency}ms</div>` : '<div class="network-ping offline">OFFLINE</div>'}
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Network status error:', e);
+    }
+}
+
+async function loadNetChat() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/net-chat`);
+        const data = await resp.json();
+        const container = document.getElementById('net-chat-messages');
+        if (!container) return;
+        const msgs = data.messages || [];
+        container.innerHTML = msgs.slice(-20).map(m =>
+            `<div class="net-chat-msg"><span class="net-chat-node">${m.node}</span> ${m.text} <span class="net-chat-time">${m.ts?.split(' ')[1] || ''}</span></div>`
+        ).join('');
+        container.scrollTop = container.scrollHeight;
+    } catch(e) {}
+}
+
+async function sendNetChat() {
+    const input = document.getElementById('net-chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    try {
+        await fetch(`${CONFIG.apiBase}/api/net-chat`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: msg, node: 'Pi' }),
+        });
+        loadNetChat();
+    } catch(e) {}
+}
+
+// Load chat on init and refresh
+setInterval(loadNetChat, 10000);
+document.addEventListener('DOMContentLoaded', loadNetChat);
+
+async function loadBuildStatus() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/buildstatus`);
+        const data = await resp.json();
+        const feed = document.getElementById('build-feed');
+        if (data.builds && data.builds.length > 0) {
+            feed.innerHTML = data.builds.map(b => `
+                <div class="build-entry ${b.status}">
+                    <div class="build-time">${new Date(b.timestamp).toLocaleTimeString()}</div>
+                    <div class="build-agent">${b.agent}</div>
+                    <div class="build-msg">${b.message}</div>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Build status error:', e);
+    }
+}
+
+// =============================================================================
+// VOICE DUMP — Full Noir Pipeline: Record → Transcribe → Shape → Save
+// =============================================================================
+
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+let _voiceCurrentRaw = '';
+let _voiceCurrentShaped = '';
+
+function _vpStage(active, done = []) {
+    const stages = ['record','transcribe','shape','save'];
+    stages.forEach(s => {
+        const el = document.getElementById(`vps-${s}`);
+        if (!el) return;
+        el.className = 'vp-stage';
+        if (s === active) el.classList.add('running');
+        else if (done.includes(s)) el.classList.add('done');
+    });
+}
+
+function _vpDone(stages) {
+    stages.forEach(s => {
+        const el = document.getElementById(`vps-${s}`);
+        if (el) { el.className = 'vp-stage done'; }
+    });
+}
+
+function toggleVoiceRecord() {
+    const btn = document.getElementById('voice-record-btn');
+    const shapeBtn = document.getElementById('voice-shape-btn');
+    const transcription = document.getElementById('voice-transcription');
+    const noirOut = document.getElementById('voice-noir-output');
+
+    if (!isRecording) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+
+            mediaRecorder.onstop = async () => {
+                btn.innerHTML = '&#9679; RECORD';
+                btn.classList.remove('recording');
+                isRecording = false;
+                _vpStage('transcribe', ['record']);
+
+                transcription.innerHTML = '<span class="voice-placeholder" style="color:#f39c12">Transcribing via Whisper...</span>';
+                shapeBtn.disabled = true;
+
+                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', blob, 'voice.webm');
+
+                try {
+                    const resp = await fetch(`${CONFIG.apiBase}/api/transcribe`, { method: 'POST', body: formData });
+                    const data = await resp.json();
+                    const text = data.transcript || data.error || 'No transcript returned';
+                    _voiceCurrentRaw = text;
+                    transcription.textContent = text;
+                    _vpDone(['record','transcribe']);
+                    _vpStage('shape', ['record','transcribe']);
+                    // Auto-highlight shape stage
+                    const shapeEl = document.getElementById('vps-shape');
+                    if (shapeEl) { shapeEl.className = 'vp-stage active'; }
+                    shapeBtn.disabled = false;
+                } catch (e) {
+                    transcription.textContent = 'Transcription failed: ' + e.message;
+                    _vpStage('record', []);
+                }
+                stream.getTracks().forEach(t => t.stop());
+            };
+
+            mediaRecorder.start(500); // collect chunks every 500ms
+            btn.innerHTML = '&#9632; STOP';
+            btn.classList.add('recording');
+            isRecording = true;
+            _voiceCurrentRaw = '';
+            _voiceCurrentShaped = '';
+            shapeBtn.disabled = true;
+            document.getElementById('voice-save-btn').disabled = true;
+            noirOut.innerHTML = '<span style="color:#444;font-style:normal">Shaped noir prose will appear here...</span>';
+            transcription.innerHTML = '<span class="voice-placeholder recording">Recording... speak now</span>';
+            _vpStage('record', []);
+        }).catch(e => {
+            transcription.textContent = 'Microphone access denied: ' + e.message;
+        });
+    } else {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+    }
+}
+
+async function shapeToNoir() {
+    const raw = _voiceCurrentRaw || document.getElementById('voice-transcription').textContent.trim();
+    if (!raw || raw.startsWith('Press RECORD') || raw.startsWith('Transcription')) return;
+
+    const shapeBtn = document.getElementById('voice-shape-btn');
+    const noirOut = document.getElementById('voice-noir-output');
+    const saveBtn = document.getElementById('voice-save-btn');
+
+    shapeBtn.disabled = true;
+    shapeBtn.textContent = '…SHAPING';
+    _vpStage('shape', ['record','transcribe']);
+    noirOut.innerHTML = '<span style="color:#9b59b6;font-style:normal;animation:pulse 1s infinite">Shaping into noir prose...</span>';
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/noir/shape`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: raw }),
+        });
+        const data = await resp.json();
+        if (data.shaped) {
+            _voiceCurrentShaped = data.shaped;
+            noirOut.innerHTML = data.shaped.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+            _vpDone(['record','transcribe','shape']);
+            const saveEl = document.getElementById('vps-save');
+            if (saveEl) { saveEl.className = 'vp-stage active'; }
+            saveBtn.disabled = false;
+        } else {
+            noirOut.textContent = 'Shape failed: ' + (data.error || 'unknown error');
+        }
+    } catch (e) {
+        noirOut.textContent = 'Shape error: ' + e.message;
+    }
+    shapeBtn.innerHTML = '&#10022; SHAPE';
+    shapeBtn.disabled = false;
+}
+
+async function saveNoirPiece() {
+    const shaped = _voiceCurrentShaped;
+    const raw = _voiceCurrentRaw;
+    if (!shaped) return;
+
+    const saveBtn = document.getElementById('voice-save-btn');
+    const orderHint = document.getElementById('voice-order-hint').value;
+    saveBtn.textContent = 'SAVING...';
+    saveBtn.disabled = true;
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/noir/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shaped, raw, order_hint: orderHint }),
+        });
+        const data = await resp.json();
+        if (data.saved) {
+            _vpDone(['record','transcribe','shape','save']);
+            saveBtn.textContent = '✓ SAVED';
+            setTimeout(() => {
+                saveBtn.textContent = 'SAVE';
+                saveBtn.disabled = false;
+                // Reset pipeline
+                _vpStage('record', []);
+                const recEl = document.getElementById('vps-record');
+                if (recEl) recEl.className = 'vp-stage active';
+            }, 2500);
+        } else {
+            saveBtn.textContent = 'SAVE';
+            saveBtn.disabled = false;
+        }
+    } catch (e) {
+        saveBtn.textContent = 'SAVE';
+        saveBtn.disabled = false;
+        console.error('Save noir error:', e);
+    }
+}
+
+// NOIR PIECES MODAL
+function openNoirPiecesModal() {
+    document.getElementById('noir-pieces-overlay').style.display = 'flex';
+    loadNoirPieces();
+}
+function closeNoirPiecesModal() {
+    document.getElementById('noir-pieces-overlay').style.display = 'none';
+}
+
+async function loadNoirPieces() {
+    const list = document.getElementById('noir-pieces-list');
+    list.innerHTML = '<div style="color:#555;font-size:12px;padding:20px">Loading pieces...</div>';
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/noir/pieces`);
+        const data = await resp.json();
+        const pieces = data.pieces || [];
+        if (!pieces.length) {
+            list.innerHTML = '<div style="color:#555;font-size:12px;padding:20px;text-align:center">No pieces saved yet.<br>Record a voice dump, shape it, and save it.</div>';
+            return;
+        }
+        list.innerHTML = pieces.map((p, i) => {
+            const d = new Date(p.timestamp);
+            const ts = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+            const preview = (p.shaped || '').substring(0, 180) + ((p.shaped || '').length > 180 ? '…' : '');
+            const orderLabel = p.order_hint ? `#${p.order_hint}` : `—`;
+            return `<div class="noir-piece-card" onclick="toggleNoirPiece(this)" data-id="${p.id}">
+                <div class="noir-piece-num">
+                    <span>PIECE ${orderLabel}</span>
+                    <span class="noir-piece-timestamp">${ts}</span>
+                </div>
+                <div class="noir-piece-preview">${preview}</div>
+                <div class="noir-piece-full">
+                    <div style="font-size:12px;color:#d8c8e8;line-height:1.8;white-space:pre-wrap">${p.shaped || ''}</div>
+                    ${p.raw ? `<div class="noir-piece-raw"><strong style="color:#666">RAW:</strong> ${(p.raw||'').substring(0,300)}${(p.raw||'').length>300?'…':''}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        list.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:20px">Error loading pieces: ' + e.message + '</div>';
+    }
+}
+
+function toggleNoirPiece(card) {
+    const full = card.querySelector('.noir-piece-full');
+    if (!full) return;
+    const isOpen = full.classList.contains('open');
+    // Close all others
+    document.querySelectorAll('.noir-piece-full.open').forEach(el => {
+        el.classList.remove('open');
+        el.closest('.noir-piece-card').classList.remove('expanded');
+    });
+    if (!isOpen) {
+        full.classList.add('open');
+        card.classList.add('expanded');
+    }
+}
+
+// =============================================================================
+// DAILY LETTER TO MY SONS
+// =============================================================================
+
+async function generateDailyLetter() {
+    // Load preview panel on startup
+    await loadLetterPreview();
+}
+
+async function loadLetterPreview() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/letter/today`);
+        const data = await resp.json();
+        const letter = data.letter;
+
+        document.getElementById('letter-preview-date').textContent = letter.date_display || letter.date;
+        document.getElementById('letter-preview-son').textContent = `Today's personal note → ${letter.son_display || letter.son}`;
+
+        // Show first ~120 chars as teaser
+        const snippet = (letter.text || '').replace(/\n/g, ' ').substring(0, 140) + '…';
+        document.getElementById('letter-preview-snippet').textContent = snippet;
+
+        // Load archive strip
+        loadArchiveStrip();
+    } catch (e) {
+        document.getElementById('letter-preview-date').textContent = new Date().toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'});
+        document.getElementById('letter-preview-snippet').textContent = 'Click READ to generate today\'s letter';
+    }
+}
+
+async function loadArchiveStrip() {
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/letter/archive`);
+        const data = await resp.json();
+        const strip = document.getElementById('letter-archive-strip');
+        strip.innerHTML = (data.archive || []).slice(0, 10).map(l =>
+            `<span class="letter-stamp" onclick="openLetterModal('${l.date}')" title="Open letter">
+                ${l.date} · ${l.son_display || l.son}
+            </span>`
+        ).join('');
+    } catch(e) {}
+}
+
+async function openLetterModal(dateKey) {
+    const overlay = document.getElementById('letter-modal-overlay');
+    const paper = document.getElementById('letter-paper');
+    overlay.style.display = 'flex';
+    paper.innerHTML = '<div class="letter-paper-loading">Pulling from the heart...</div>';
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/letter/today`);
+        const data = await resp.json();
+        const letter = data.letter;
+
+        // Format the text into paragraphs
+        const paras = (letter.text || '').split(/\n\n+/).filter(p => p.trim());
+        const html = paras.map(p => `<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+
+        paper.innerHTML = `
+            <div class="letter-paper-date">${letter.date_display || letter.date}</div>
+            <div class="letter-paper-body">${html}</div>
+        `;
+    } catch(e) {
+        paper.innerHTML = '<div class="letter-paper-loading">Could not load letter.</div>';
+    }
+}
+
+function closeLetterModal() {
+    document.getElementById('letter-modal-overlay').style.display = 'none';
+}
+
+async function openArchiveModal() {
+    const overlay = document.getElementById('archive-modal-overlay');
+    const list = document.getElementById('archive-list');
+    overlay.style.display = 'flex';
+    list.innerHTML = 'Loading...';
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/letter/archive`);
+        const data = await resp.json();
+        const archive = data.archive || [];
+
+        if (!archive.length) {
+            list.innerHTML = '<div style="color:#666;font-style:italic">No letters yet. Read today\'s letter to generate the first one.</div>';
+            return;
+        }
+
+        list.innerHTML = archive.map(l => {
+            const snippet = (l.text || '').replace(/\n/g,' ').substring(0, 100) + '…';
+            return `<div class="archive-entry" onclick="openLetterFromArchive('${l.date}', this)" data-letter='${JSON.stringify(l).replace(/'/g,"&#39;")}'>
+                <div>
+                    <span class="archive-entry-date">${l.date_display || l.date}</span>
+                    <span class="archive-entry-son">Personal note → ${l.son_display || l.son}</span>
+                </div>
+                <div class="archive-entry-snippet">${snippet}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        list.innerHTML = '<div style="color:#f00">Error loading archive.</div>';
+    }
+}
+
+function closeArchiveModal() {
+    document.getElementById('archive-modal-overlay').style.display = 'none';
+}
+
+function openLetterFromArchive(dateKey, el) {
+    const letterData = JSON.parse(el.getAttribute('data-letter'));
+    closeArchiveModal();
+
+    const overlay = document.getElementById('letter-modal-overlay');
+    const paper = document.getElementById('letter-paper');
+    overlay.style.display = 'flex';
+
+    const paras = (letterData.text || '').split(/\n\n+/).filter(p => p.trim());
+    const html = paras.map(p => `<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+    paper.innerHTML = `
+        <div class="letter-paper-date">${letterData.date_display || letterData.date}</div>
+        <div class="letter-paper-body">${html}</div>
+    `;
+}
+
+// =============================================================================
+// THINKING MIND MAP — Interactive Brainstorm Canvas
+// =============================================================================
+
+let thinkingSvg, thinkingG, thinkingSimulation, thinkingZoom;
+let thinkingNodes = [];
+let thinkingLinks = [];
+let thinkingNodeId = 0;
+
+function initThinkingMindMap() {
+    // Init happens when full screen opens, not on page load
+}
+
+let selectedThinkingNode = null;
+let _mindmapInited = false;
+
+function initFullScreenMindMap() {
+    if (_mindmapInited) return;
+    _mindmapInited = true;
+
+    const svg = d3.select('#thinking-svg');
+    const w = window.innerWidth;
+    const h = window.innerHeight - 60;
+
+    svg.attr('viewBox', [0, 0, w, h]);
+
+    thinkingZoom = d3.zoom()
+        .scaleExtent([0.2, 5])
+        .on('zoom', e => thinkingG.attr('transform', e.transform));
+
+    svg.call(thinkingZoom);
+    thinkingG = svg.append('g');
+    thinkingSvg = svg;
+    thinkingSvg._width = w;
+    thinkingSvg._height = h;
+
+    if (thinkingNodes.length === 0) {
+        thinkingNodes.push({ id: thinkingNodeId++, label: 'YOUR IDEA', x: w/2, y: h/2, r: 28, color: '#ffffff', isCenter: true });
+        thinkingSimulation = d3.forceSimulation(thinkingNodes)
+            .force('link', d3.forceLink(thinkingLinks).id(d => d.id).distance(130))
+            .force('charge', d3.forceManyBody().strength(-280))
+            .force('center', d3.forceCenter(w/2, h/2))
+            .force('collision', d3.forceCollide().radius(d => d.r + 12))
+            .on('tick', renderThinkingMap);
+    } else {
+        thinkingSimulation = d3.forceSimulation(thinkingNodes)
+            .force('link', d3.forceLink(thinkingLinks).id(d => d.id).distance(130))
+            .force('charge', d3.forceManyBody().strength(-280))
+            .force('center', d3.forceCenter(w/2, h/2))
+            .force('collision', d3.forceCollide().radius(d => d.r + 12))
+            .on('tick', renderThinkingMap);
+    }
+    renderThinkingMap();
+}
+
+function openMindMapFull() {
+    const seed = document.getElementById('thinking-input').value.trim();
+    document.getElementById('mindmap-fullscreen').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    _mindmapInited = false;
+    thinkingG = null;
+    initFullScreenMindMap();
+
+    if (seed) {
+        document.getElementById('mindmap-fs-input').value = seed;
+        document.getElementById('thinking-input').value = '';
+        expandMindMap(seed);
+    }
+}
+
+function closeMindMapFull() {
+    document.getElementById('mindmap-fullscreen').style.display = 'none';
+    document.body.style.overflow = '';
+    hideNodeTooltip();
+}
+
+function expandFromInput() {
+    const seed = document.getElementById('mindmap-fs-input').value.trim();
+    if (seed) expandMindMap(seed);
+}
+
+function renderThinkingMap() {
+    if (!thinkingG) return;
+
+    // Links
+    const link = thinkingG.selectAll('.thinking-link')
+        .data(thinkingLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+    link.enter().append('line')
+        .attr('class', 'thinking-link')
+        .attr('stroke', '#00fff966')
+        .attr('stroke-width', 1.5)
+        .merge(link)
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+    link.exit().remove();
+
+    // Nodes
+    const node = thinkingG.selectAll('.thinking-node')
+        .data(thinkingNodes, d => d.id);
+
+    const nodeEnter = node.enter().append('g')
+        .attr('class', 'thinking-node')
+        .call(d3.drag()
+            .on('start', thinkDragStart)
+            .on('drag', thinkDrag)
+            .on('end', thinkDragEnd))
+        .on('click', function(event, d) {
+            event.stopPropagation();
+            showNodeTooltip(event, d);
+        });
+
+    nodeEnter.append('circle')
+        .attr('r', d => d.r)
+        .attr('fill', d => d.isCenter ? 'rgba(255,255,255,0.15)' : d.color + '22')
+        .attr('stroke', d => d.color)
+        .attr('stroke-width', d => d.isCenter ? 2.5 : 1.5)
+        .style('cursor', 'pointer');
+
+    nodeEnter.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', d => d.color)
+        .attr('font-size', d => d.isCenter ? '0.6rem' : '0.52rem')
+        .attr('font-family', 'Share Tech Mono')
+        .style('pointer-events', 'none')
+        .text(d => d.label.length > 18 ? d.label.substring(0, 18) + '…' : d.label);
+
+    const nodeUpdate = nodeEnter.merge(node);
+    nodeUpdate.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    node.exit().remove();
+}
+
+function showNodeTooltip(event, d) {
+    const tooltip = document.getElementById('mindmap-node-tooltip');
+    const labelEl = document.getElementById('tooltip-label');
+    const expandBtn = document.getElementById('tooltip-expand-btn');
+
+    labelEl.textContent = d.label;
+    tooltip.style.display = 'flex';
+    tooltip.style.left = Math.min(event.clientX + 12, window.innerWidth - 280) + 'px';
+    tooltip.style.top = Math.min(event.clientY - 10, window.innerHeight - 80) + 'px';
+
+    expandBtn.onclick = () => {
+        hideNodeTooltip();
+        document.getElementById('mindmap-fs-input').value = d.label;
+        expandMindMap(d.label, d.id);
+    };
+}
+
+function hideNodeTooltip() {
+    document.getElementById('mindmap-node-tooltip').style.display = 'none';
+}
+
+async function expandMindMap(seedOverride, parentNodeId) {
+    const input = document.getElementById('mindmap-fs-input') || document.getElementById('thinking-input');
+    const seed = seedOverride || input.value.trim();
+    if (!seed) return;
+
+    const status = document.getElementById('mindmap-fs-status') || document.getElementById('mindmap-status');
+    status.textContent = '⟳ AI expanding...';
+    if (input && !seedOverride) input.value = '';
+
+    // Fresh map — clear everything
+    if (!parentNodeId) {
+        thinkingNodes = [];
+        thinkingLinks = [];
+        thinkingNodeId = 0;
+        selectedThinkingNode = null;
+        if (thinkingG) thinkingG.selectAll('*').remove();
+    }
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/mindmap/expand`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seed }),
+        });
+        const tree = await resp.json();
+        if (tree.error) throw new Error(tree.error);
+
+        const w = thinkingSvg._width || window.innerWidth;
+        const h = thinkingSvg._height || window.innerHeight - 60;
+
+        // Find parent node position (for expansion) or use center
+        let anchorNode = null;
+        if (parentNodeId !== undefined) {
+            anchorNode = thinkingNodes.find(n => n.id === parentNodeId);
+        }
+        const cx = anchorNode ? anchorNode.x : w / 2;
+        const cy = anchorNode ? anchorNode.y : h / 2;
+
+        // Center/anchor node
+        let centerNode;
+        if (!parentNodeId) {
+            centerNode = { id: thinkingNodeId++, label: tree.center, x: cx, y: cy, r: 32, color: '#ffffff', isCenter: true };
+            thinkingNodes.push(centerNode);
+        } else {
+            centerNode = anchorNode; // expand FROM the clicked node
+        }
+
+        // Branches
+        const branches = tree.branches || [];
+        const angleOffset = Math.random() * Math.PI; // vary so expansions don't overlap
+        branches.forEach((branch, bi) => {
+            const angle = angleOffset + (bi / branches.length) * 2 * Math.PI;
+            const dist = parentNodeId ? 140 : 170;
+            const bx = cx + Math.cos(angle) * dist;
+            const by = cy + Math.sin(angle) * dist;
+            const branchNode = { id: thinkingNodeId++, label: branch.label, x: bx, y: by, r: 20, color: branch.color || '#00fff9' };
+            thinkingNodes.push(branchNode);
+            thinkingLinks.push({ source: centerNode.id, target: branchNode.id });
+
+            (branch.children || []).forEach((child, ci) => {
+                const spread = ((ci - (branch.children.length - 1) / 2) / branch.children.length) * 1.1;
+                const childAngle = angle + spread;
+                const childNode = {
+                    id: thinkingNodeId++,
+                    label: child.label,
+                    x: bx + Math.cos(childAngle) * 110,
+                    y: by + Math.sin(childAngle) * 110,
+                    r: 13,
+                    color: branch.color || '#00fff9'
+                };
+                thinkingNodes.push(childNode);
+                thinkingLinks.push({ source: branchNode.id, target: childNode.id });
+            });
+        });
+
+        updateThinkingSimulation();
+        status.textContent = `✓ ${thinkingNodes.length} nodes · saved`;
+        status.style.color = '#39ff14';
+
+        // Hints
+        const hints = tree.weaviate_hints || [];
+        const hintsEl = document.getElementById('mindmap-hints');
+        if (hints.length) {
+            hintsEl.innerHTML = '<span style="color:#888;font-size:0.65rem">FROM YOUR KNOWLEDGE: </span>' +
+                hints.map(h => `<span class="mindmap-hint-chip" onclick="expandMindMap('${h.substring(0,40).replace(/'/g,'').replace(/"/g,'')}')">
+                    ${h.substring(0,55)}${h.length>55?'…':''}</span>`).join('');
+        } else {
+            hintsEl.innerHTML = '';
+        }
+
+        setTimeout(() => { status.textContent = ''; }, 4000);
+
+    } catch(e) {
+        status.textContent = '✗ ' + e.message;
+        status.style.color = '#ff2a6d';
+    }
+}
+
+function addThinkingNode() { addManualNode(); }
+
+function addManualNode() {
+    const input = document.getElementById('mindmap-fs-input') || document.getElementById('thinking-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const colors = ['#00fff9', '#ff00ff', '#39ff14', '#ffd700', '#ff2a6d', '#bc13fe', '#ff6a00'];
+    const color = colors[thinkingNodeId % colors.length];
+    const w = thinkingSvg._width || 800;
+    const h = thinkingSvg._height || 600;
+
+    const newNode = {
+        id: thinkingNodeId++,
+        label: text,
+        x: w / 2 + (Math.random() - 0.5) * 300,
+        y: h / 2 + (Math.random() - 0.5) * 300,
+        r: Math.min(20, 12 + text.length * 0.3),
+        color: color,
+    };
+
+    thinkingNodes.push(newNode);
+    if (thinkingNodes.length > 1) {
+        thinkingLinks.push({ source: thinkingNodes[thinkingNodes.length - 2].id, target: newNode.id });
+    }
+    input.value = '';
+    updateThinkingSimulation();
+}
+
+async function openMindMapHistory() {
+    const overlay = document.getElementById('mindmap-history-overlay');
+    const list = document.getElementById('mindmap-history-list');
+    overlay.style.display = 'flex';
+    list.innerHTML = 'Loading...';
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/mindmap/history`);
+        const data = await resp.json();
+        const maps = data.maps || [];
+
+        if (!maps.length) {
+            list.innerHTML = '<div style="color:#666;font-style:italic">No saved mind maps yet. Expand your first idea!</div>';
+            return;
+        }
+
+        list.innerHTML = maps.map(m => `
+            <div class="archive-entry" onclick="loadMindMapFromHistory('${m.id}', this)" data-nodes='${m.nodes.replace(/'/g,"&#39;")}'>
+                <div><span class="archive-entry-date">${m.title}</span></div>
+                <div class="archive-entry-snippet">${m.created_at ? m.created_at.substring(0,10) : ''}</div>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = '<div style="color:#f00">Error loading history.</div>';
+    }
+}
+
+function closeMindMapHistory() {
+    document.getElementById('mindmap-history-overlay').style.display = 'none';
+}
+
+function loadMindMapFromHistory(id, el) {
+    closeMindMapHistory();
+    const nodesJson = el.getAttribute('data-nodes');
+    try {
+        const tree = JSON.parse(nodesJson);
+        document.getElementById('thinking-input').value = tree.center || '';
+        expandMindMap();
+    } catch(e) {}
+}
+
+function updateThinkingSimulation() {
+    thinkingSimulation.nodes(thinkingNodes);
+    thinkingSimulation.force('link').links(thinkingLinks);
+    thinkingSimulation.alpha(0.5).restart();
+}
+
+function clearThinkingMap() {
+    thinkingNodes = [];
+    thinkingLinks = [];
+    thinkingNodeId = 0;
+    selectedThinkingNode = null;
+    hideNodeTooltip();
+    if (thinkingG) thinkingG.selectAll('*').remove();
+    if (document.getElementById('mindmap-hints')) document.getElementById('mindmap-hints').innerHTML = '';
+    if (thinkingSimulation) {
+        thinkingSimulation.nodes(thinkingNodes);
+        thinkingSimulation.force('link').links(thinkingLinks);
+        thinkingSimulation.alpha(0).stop();
+    }
+}
+
+function thinkDragStart(event, d) {
+    if (!event.active) thinkingSimulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function thinkDrag(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
+
+function thinkDragEnd(event, d) {
+    if (!event.active) thinkingSimulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+}
+
+// =============================================================================
+// SECOND TICKER — Crypto + System Status
+// =============================================================================
+
+async function loadSystemTicker() {
+    // Now handled by loadTickers() — both strips built together
+    loadTickers();
+}
+// MEGA-SHANEBRAIN CONSTRUCTION PANEL
+// =============================================================================
+
+const MEGA = {
+    svgEl: null,
+    zones: {
+        brain:     { cx:200, cy:72,  r:45, botR:68, pct:0, complete:false, pitchBase:660, color:'#00ffff', bots:['Sparky','Volt','Neon','Glitch'] },
+        leftHand:  { cx:78,  cy:244, r:18, botR:38, pct:0, complete:false, pitchBase:440, color:'#00ffcc', bots:['Rivet','Torch','Weld']          },
+        rightHand: { cx:322, cy:244, r:18, botR:38, pct:0, complete:false, pitchBase:550, color:'#00ccff', bots:['Blaze','Arc','Flux']             },
+        leftFoot:  { cx:155, cy:382, r:22, botR:44, pct:0, complete:false, pitchBase:220, color:'#00ffaa', bots:['Bolt','Stomp','Grind']           },
+        rightFoot: { cx:245, cy:382, r:22, botR:44, pct:0, complete:false, pitchBase:330, color:'#aaffcc', bots:['Crank','Spike','Forge']          },
+    },
+    bots: {},         // name → {el, x, y, zoneId, torchAngle}
+    sparkTimers: [],
+    audioCtx: null,
+    megaActive: false,
+    sessionId: 'mega-' + Date.now(),
+    glitchTimeout: null,
+};
+
+function svgNs(tag, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+    return el;
+}
+
+function initMegaPanel() {
+    MEGA.svgEl = document.getElementById('mega-svg');
+    if (!MEGA.svgEl) return;
+    drawMegaHumanoid();
+    placeAllMegaBots();
+    startMegaSparks();
+    scheduleBrushOff();
+    updateMegaMetrics();
+    setInterval(updateMegaMetrics, 30000);
+    updateBotAnimationState();
+    setInterval(updateBotAnimationState, 15000);
+    addMegaLog('Construction started. 17 bots on site.');
+}
+
+// ── Draw humanoid skeleton ──────────────────────────────────────────────────
+
+function drawMegaHumanoid() {
+    const svg = MEGA.svgEl;
+    const S = '#00ffff', sw = '1.8', fill = 'none';
+
+    // Defs: glow filters + scanline pattern
+    const defs = svgNs('defs');
+    Object.keys(MEGA.zones).forEach(id => {
+        const f = svgNs('filter', { id:`mgf-${id}`, x:'-80%', y:'-80%', width:'260%', height:'260%' });
+        const b = svgNs('feGaussianBlur', { in:'SourceGraphic', stdDeviation:'6', result:'b' });
+        const m = svgNs('feMerge');
+        [svgNs('feMergeNode',{in:'b'}), svgNs('feMergeNode',{in:'SourceGraphic'})].forEach(n=>m.appendChild(n));
+        f.appendChild(b); f.appendChild(m);
+        defs.appendChild(f);
+    });
+    svg.appendChild(defs);
+
+    // Body skeleton group
+    const g = svgNs('g', { id:'mega-skeleton' });
+    const line = (x1,y1,x2,y2) => g.appendChild(svgNs('line',{x1,y1,x2,y2,stroke:S,'stroke-width':sw}));
+
+    // Head
+    g.appendChild(svgNs('circle', {cx:'200',cy:'72',r:'45',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.04)',id:'zone-brain'}));
+    // Neck
+    g.appendChild(svgNs('rect', {x:'188',y:'117',width:'24',height:'22',stroke:S,'stroke-width':sw,fill}));
+    // Torso
+    g.appendChild(svgNs('rect', {x:'150',y:'139',width:'100',height:'105',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.02)',rx:'4'}));
+    // Arms
+    line(150,158,90,212); line(90,212,78,238);
+    line(250,158,310,212); line(310,212,322,238);
+    // Hands (zones)
+    g.appendChild(svgNs('circle', {cx:'78',cy:'244',r:'18',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.04)',id:'zone-leftHand'}));
+    g.appendChild(svgNs('circle', {cx:'322',cy:'244',r:'18',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.04)',id:'zone-rightHand'}));
+    // Hips & legs
+    line(175,244,225,244);
+    line(185,244,168,318); line(168,318,155,374);
+    line(215,244,232,318); line(232,318,245,374);
+    // Feet (zones)
+    g.appendChild(svgNs('ellipse', {cx:'155',cy:'382',rx:'28',ry:'12',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.04)',id:'zone-leftFoot'}));
+    g.appendChild(svgNs('ellipse', {cx:'245',cy:'382',rx:'28',ry:'12',stroke:S,'stroke-width':sw,fill:'rgba(0,255,255,0.04)',id:'zone-rightFoot'}));
+
+    svg.appendChild(g);
+
+    // Zone glow overlays
+    const glows = svgNs('g', {id:'mega-glows'});
+    Object.entries(MEGA.zones).forEach(([id, z]) => {
+        let el;
+        if (id==='leftFoot'||id==='rightFoot') el = svgNs('ellipse',{cx:z.cx,cy:z.cy,rx:'28',ry:'12',fill:z.color,opacity:'0.04',id:`mglow-${id}`});
+        else el = svgNs('circle',{cx:z.cx,cy:z.cy,r:z.r,fill:z.color,opacity:'0.04',id:`mglow-${id}`});
+        glows.appendChild(el);
+    });
+    svg.appendChild(glows);
+
+    // MEGA face (hidden until activation) — pixel art style
+    const face = svgNs('g', {id:'mega-face',opacity:'0',transform:'translate(200,72)'});
+    // Eye whites
+    [[-16,-12],[8,-12]].forEach(([ex,ey])=>{
+        face.appendChild(svgNs('rect',{x:ex,y:ey,width:'14',height:'9',fill:'#00ffff',rx:'2',class:'mega-eye'}));
+        // Pupil
+        face.appendChild(svgNs('rect',{x:ex+4,y:ey+2,width:'5',height:'5',fill:'#001133',rx:'1'}));
+    });
+    // Nose
+    face.appendChild(svgNs('rect',{x:'-3',y:'3',width:'6',height:'5',fill:'rgba(0,255,255,0.5)'}));
+    // Mouth (animates when talking)
+    face.appendChild(svgNs('rect',{x:'-16',y:'16',width:'32',height:'6',fill:'#00ffff',rx:'3',id:'mega-mouth'}));
+    // Teeth lines
+    [-8,0,8].forEach(tx => face.appendChild(svgNs('line',{x1:tx,y1:16,x2:tx,y2:22,stroke:'#001133','stroke-width':'1'})));
+    // Scanlines overlay
+    const scanRect = svgNs('rect',{x:'-45',y:'-45',width:'90',height:'90',fill:'none',stroke:'none',id:'mega-scanlines',opacity:'0.35'});
+    face.appendChild(scanRect);
+    svg.appendChild(face);
+
+    // Welding sparks layer (top)
+    svg.appendChild(svgNs('g', {id:'mega-sparks'}));
+}
+
+// ── Bot placement ───────────────────────────────────────────────────────────
+
+function placeAllMegaBots() {
+    const svg = MEGA.svgEl;
+    const botsG = svgNs('g', {id:'mega-bots'});
+
+    Object.entries(MEGA.zones).forEach(([zoneId, zone]) => {
+        const n = zone.bots.length;
+        const startAngles = { brain:-150, leftHand:130, rightHand:50, leftFoot:200, rightFoot:340 };
+        const spread =      { brain:300,  leftHand:100, rightHand:100, leftFoot:100, rightFoot:100 };
+
+        zone.bots.forEach((name, i) => {
+            const angleDeg = startAngles[zoneId] + (i / Math.max(n-1,1)) * spread[zoneId];
+            const rad = angleDeg * Math.PI / 180;
+            const bx = zone.cx + zone.botR * Math.cos(rad);
+            const by = zone.cy + zone.botR * Math.sin(rad);
+            const torchAngle = Math.atan2(zone.cy - by, zone.cx - bx);
+
+            const el = createMegaBot(name, bx, by, torchAngle);
+            botsG.appendChild(el);
+            MEGA.bots[name] = { el, x:bx, y:by, zoneId, torchAngle };
+        });
+    });
+
+    svg.appendChild(botsG);
+}
+
+function createMegaBot(name, x, y, torchAngle) {
+    const g = svgNs('g', {
+        id: `mbot-${name}`,
+        transform: `translate(${x.toFixed(1)},${y.toFixed(1)})`,
+        style: 'cursor:pointer',
+        class: 'mega-bot'
+    });
+
+    const title = svgNs('title');
+    title.textContent = name;
+    g.appendChild(title);
+
+    // Sway animation
+    const sway = svgNs('animateTransform', {
+        attributeName: 'transform', type: 'rotate',
+        from: `-4 0 5`, to: `4 0 5`,
+        dur: (1.5 + Math.random() * 1.5).toFixed(1) + 's',
+        repeatCount: 'indefinite', additive: 'sum',
+        begin: (-Math.random() * 2).toFixed(1) + 's',
+    });
+    g.appendChild(sway);
+
+    // Halo glow (pulsing ring — animates with zone activity)
+    const halo = svgNs('circle', { cx:'0', cy:'-3', r:'12', fill:'none',
+        stroke:'#00ffff', 'stroke-width':'1.2', opacity:'0', id:`mhalo-${name}`,
+        class:'mega-halo' });
+    const haloAnim = svgNs('animate', { attributeName:'r',
+        values:'10;16;10', dur: (2 + Math.random()).toFixed(1)+'s',
+        repeatCount:'indefinite' });
+    const haloFade = svgNs('animate', { attributeName:'opacity',
+        values:'0.6;0;0.6', dur: (2 + Math.random()).toFixed(1)+'s',
+        repeatCount:'indefinite' });
+    halo.appendChild(haloAnim);
+    halo.appendChild(haloFade);
+    g.appendChild(halo);
+
+    // Body (minion capsule shape)
+    g.appendChild(svgNs('ellipse', { cx:'0', cy:'3', rx:'6', ry:'8',
+        fill:'#1a3388', stroke:'#4488ff', 'stroke-width':'0.8', id:`mbody-${name}` }));
+    // Overalls stripe
+    g.appendChild(svgNs('rect', { x:'-6', y:'1', width:'12', height:'4',
+        fill:'#4400aa', opacity:'0.6' }));
+    // Head
+    g.appendChild(svgNs('circle', { cx:'0', cy:'-8', r:'6',
+        fill:'#2255dd', stroke:'#77aaff', 'stroke-width':'0.7', id:`mhead-${name}` }));
+    // Goggles (minion eyes)
+    g.appendChild(svgNs('ellipse', { cx:'-2.5', cy:'-8.5', rx:'2.2', ry:'2.2',
+        fill:'#ccddff', stroke:'#00ffff', 'stroke-width':'0.5', id:`meye1-${name}` }));
+    g.appendChild(svgNs('circle', { cx:'-2.5', cy:'-8.5', r:'1',
+        fill:'#0000ff', id:`mpupil1-${name}` }));
+    g.appendChild(svgNs('ellipse', { cx:'2.5', cy:'-8.5', rx:'2.2', ry:'2.2',
+        fill:'#ccddff', stroke:'#00ffff', 'stroke-width':'0.5', id:`meye2-${name}` }));
+    g.appendChild(svgNs('circle', { cx:'2.5', cy:'-8.5', r:'1',
+        fill:'#0000ff', id:`mpupil2-${name}` }));
+    // Goggle strap
+    g.appendChild(svgNs('line', { x1:'-4.8', y1:'-8.5', x2:'4.8', y2:'-8.5',
+        stroke:'#888', 'stroke-width':'0.8' }));
+
+    // Torch arm
+    const armLen = 14;
+    const tx = (3 + Math.cos(torchAngle) * armLen).toFixed(1);
+    const ty = (Math.sin(torchAngle) * armLen).toFixed(1);
+    g.appendChild(svgNs('line', { x1:'3', y1:'0', x2: tx, y2: ty,
+        stroke:'#999', 'stroke-width':'1.8', 'stroke-linecap':'round' }));
+    // Torch body (cylinder)
+    g.appendChild(svgNs('rect', { x:(parseFloat(tx)-2.5).toFixed(1),
+        y:(parseFloat(ty)-5).toFixed(1), width:'5', height:'8',
+        fill:'#444', stroke:'#777', 'stroke-width':'0.5', rx:'1.5' }));
+
+    // Flame outer (animated)
+    const flameOuter = svgNs('ellipse', {
+        cx: tx, cy: (parseFloat(ty) - 8).toFixed(1),
+        rx:'4', ry:'6', fill:'#ff6600',
+        id: `mflame-${name}`, class:'mega-flame'
+    });
+    const flameAnimOp = svgNs('animate', {
+        attributeName:'opacity',
+        values:'0.9;0.6;1.0;0.7;0.9',
+        dur: (0.12 + Math.random()*0.08).toFixed(3)+'s',
+        repeatCount:'indefinite'
+    });
+    const flameAnimRy = svgNs('animate', {
+        attributeName:'ry',
+        values:'5;7;5;6;5',
+        dur: (0.15 + Math.random()*0.1).toFixed(3)+'s',
+        repeatCount:'indefinite'
+    });
+    flameOuter.appendChild(flameAnimOp);
+    flameOuter.appendChild(flameAnimRy);
+    g.appendChild(flameOuter);
+
+    // Flame inner (hot core)
+    const flameInner = svgNs('ellipse', {
+        cx: tx, cy: (parseFloat(ty) - 7).toFixed(1),
+        rx:'2', ry:'3.5', fill:'#ffee00', opacity:'0.9',
+        id: `mflame-inner-${name}`
+    });
+    const innerAnim = svgNs('animate', {
+        attributeName:'ry',
+        values:'3;4.5;3;3.8;3',
+        dur: (0.11 + Math.random()*0.08).toFixed(3)+'s',
+        repeatCount:'indefinite'
+    });
+    flameInner.appendChild(innerAnim);
+    g.appendChild(flameInner);
+
+    // Name label (small, above head)
+    const nameLabel = svgNs('text', {
+        x:'0', y:'-17', 'text-anchor':'middle',
+        'font-family':'Share Tech Mono, monospace',
+        'font-size':'3.5', fill:'rgba(0,255,255,0.7)',
+        'pointer-events':'none', id:`mname-${name}`
+    });
+    nameLabel.textContent = name.toUpperCase();
+    g.appendChild(nameLabel);
+
+    // Action text (what bot is doing)
+    const actionLabel = svgNs('text', {
+        x:'0', y:'18', 'text-anchor':'middle',
+        'font-family':'Share Tech Mono, monospace',
+        'font-size':'2.8', fill:'rgba(255,255,100,0.55)',
+        'pointer-events':'none', id:`maction-${name}`
+    });
+    actionLabel.textContent = 'init...';
+    g.appendChild(actionLabel);
+
+    return g;
+}
+
+// ── Spark emitter ───────────────────────────────────────────────────────────
+
+function startMegaSparks() {
+    Object.entries(MEGA.bots).forEach(([name, bot]) => {
+        const interval = 250 + Math.random()*600;
+        const t = setInterval(() => {
+            const zone = MEGA.zones[bot.zoneId];
+            if (!zone || zone.pct < 3) return;
+            // Scale spark count to zone activity: 1 spark normally, 2-3 when zone is hot
+            const count = zone.pct >= 80 ? 3 : zone.pct >= 40 ? 2 : 1;
+            for (let i = 0; i < count; i++) emitMegaSpark(bot, zone.pct);
+        }, interval);
+        MEGA.sparkTimers.push(t);
+    });
+}
+
+function emitMegaSpark(bot, pct = 50) {
+    const sparksG = document.getElementById('mega-sparks');
+    if (!sparksG) return;
+    const armLen = 13;
+    const tx = bot.x + 3 + Math.cos(bot.torchAngle)*armLen;
+    const ty = bot.y + Math.sin(bot.torchAngle)*armLen - 6;
+
+    const particles = pct >= 60 ? 3 : 2;
+    const colors = pct >= 80 ? ['#ffcc00','#ff8800','#ffffff'] : ['#ffcc00','#ff8800'];
+    for (let i = 0; i < particles; i++) {
+        const r = (0.8 + (pct/100)*0.9).toFixed(1);
+        const fill = colors[Math.floor(Math.random()*colors.length)];
+        const s = svgNs('circle',{cx:tx,cy:ty,r,fill,opacity:'1'});
+        sparksG.appendChild(s);
+        const spread = 12 + (pct/100)*16;
+        const dx = (Math.random()-0.5)*spread*1.8;
+        const dy = -Math.random()*spread-4;
+        let frame=0, total=14+Math.floor(Math.random()*8);
+        const animate = ()=>{
+            frame++;
+            const p = frame/total;
+            s.setAttribute('cx', tx + dx*p);
+            s.setAttribute('cy', ty + dy*p + 12*p*p);
+            s.setAttribute('opacity', (1-p).toFixed(2));
+            if(frame<total) requestAnimationFrame(animate); else s.remove();
+        };
+        requestAnimationFrame(animate);
+    }
+}
+
+// ── Weld commit burst ────────────────────────────────────────────────────────
+
+function triggerWeldBurst() {
+    const bot = MEGA.bots['Weld'];
+    if (!bot) return;
+    for (let i = 0; i < 20; i++) {
+        setTimeout(() => emitMegaSpark(bot, 100), i * 55);
+    }
+    const glow = document.getElementById('mglow-leftHand');
+    if (glow) {
+        const orig = glow.getAttribute('opacity') || '0.04';
+        glow.setAttribute('opacity', '0.65');
+        setTimeout(() => glow.setAttribute('opacity', orig), 900);
+    }
+    addMegaLog('Weld committed a new instruction update!');
+}
+
+// ── Bot animation state (status, action text, halo, eyes) ───────────────────
+
+async function updateBotAnimationState() {
+    try {
+        const mb = await fetch(`${CONFIG.apiBase}/api/mega-brain`)
+            .then(r => r.ok ? r.json() : null).catch(() => null);
+        if (!mb?.bots) return;
+
+        // Detect new Weld commit
+        const weldLog = mb.weld_log || [];
+        const latestWeld = weldLog[0]?.timestamp || '';
+        if (latestWeld && latestWeld !== (window._lastWeldTs || '')) {
+            window._lastWeldTs = latestWeld;
+            triggerWeldBurst();
+        }
+
+        mb.bots.forEach(bot => {
+            const name = bot.name;
+            const status = (bot.status || 'UNKNOWN').toUpperCase();
+            const action = bot.last_action || '';
+
+            // Action text label
+            const actionEl = document.getElementById(`maction-${name}`);
+            if (actionEl && action) {
+                actionEl.textContent = action.length > 22 ? action.slice(0, 20) + '…' : action;
+            }
+
+            // Colors by status
+            const halo   = document.getElementById(`mhalo-${name}`);
+            const eye1   = document.getElementById(`meye1-${name}`);
+            const eye2   = document.getElementById(`meye2-${name}`);
+            const pupil1 = document.getElementById(`mpupil1-${name}`);
+            const pupil2 = document.getElementById(`mpupil2-${name}`);
+
+            if (status === 'ACTIVE') {
+                if (halo)   { halo.setAttribute('stroke', '#00ffff');   halo.setAttribute('opacity', '0.85'); }
+                if (eye1)   eye1.setAttribute('stroke', '#00ffff');
+                if (eye2)   eye2.setAttribute('stroke', '#00ffff');
+                if (pupil1) pupil1.setAttribute('fill', '#0044ff');
+                if (pupil2) pupil2.setAttribute('fill', '#0044ff');
+            } else if (status === 'ERROR') {
+                if (halo)   { halo.setAttribute('stroke', '#ff3300');   halo.setAttribute('opacity', '0.75'); }
+                if (eye1)   eye1.setAttribute('stroke', '#ff3300');
+                if (eye2)   eye2.setAttribute('stroke', '#ff3300');
+                if (pupil1) pupil1.setAttribute('fill', '#ff0000');
+                if (pupil2) pupil2.setAttribute('fill', '#ff0000');
+            } else if (status === 'IDLE' || status === 'SLEEPING' || status === 'NOT_STARTED') {
+                if (halo)   { halo.setAttribute('stroke', '#004466');   halo.setAttribute('opacity', '0.15'); }
+                if (eye1)   eye1.setAttribute('stroke', '#005577');
+                if (eye2)   eye2.setAttribute('stroke', '#005577');
+                if (pupil1) pupil1.setAttribute('fill', '#001144');
+                if (pupil2) pupil2.setAttribute('fill', '#001144');
+            } else {
+                if (halo)   { halo.setAttribute('stroke', '#00aacc');   halo.setAttribute('opacity', '0.35'); }
+            }
+        });
+    } catch(e) { console.error('updateBotAnimationState:', e); }
+}
+
+// ── Zone progress & glow ────────────────────────────────────────────────────
+
+function setZoneProgress(zoneId, pct) {
+    const zone = MEGA.zones[zoneId];
+    if (!zone) return;
+    const was = zone.complete;
+    zone.pct = Math.min(100, Math.max(0, pct));
+    const frac = zone.pct / 100;
+
+    // Glow intensity
+    const glow = document.getElementById(`mglow-${zoneId}`);
+    if (glow) glow.setAttribute('opacity', (0.04 + frac*0.38).toFixed(2));
+
+    // Zone stroke brightness
+    const zEl = document.getElementById(`zone-${zoneId}`);
+    if (zEl) {
+        zEl.setAttribute('stroke-opacity', (0.35 + frac*0.65).toFixed(2));
+        zEl.setAttribute('stroke-width', (1.8 + frac*3.2).toFixed(1));
+    }
+
+    // Progress bar
+    const bar = document.getElementById(`zone-bar-${zoneId}`);
+    if (bar) { bar.style.width = zone.pct+'%'; if(zone.pct>=100) bar.classList.add('complete'); }
+    const pctEl = document.getElementById(`zone-pct-${zoneId}`);
+    if (pctEl) pctEl.textContent = Math.round(zone.pct)+'%';
+
+    // Completion
+    if (zone.pct >= 100 && !was) {
+        zone.complete = true;
+        setTimeout(()=>triggerZoneComplete(zoneId), 400);
+    }
+
+    // Overall %
+    const overall = Math.round(Object.values(MEGA.zones).reduce((s,z)=>s+z.pct,0)/5);
+    const overallEl = document.getElementById('mega-overall-pct');
+    if (overallEl && !MEGA.megaActive) overallEl.textContent = `${overall}% COMPLETE · 16 BOTS WORKING`;
+
+    // Check all zones done
+    if (!MEGA.megaActive && Object.values(MEGA.zones).every(z=>z.complete)) {
+        setTimeout(activateMega, 2500);
+    }
+}
+
+// ── Data fetch → zone percentages ──────────────────────────────────────────
+
+async function updateMegaMetrics() {
+    // Max bots per zone (must match MEGA.zones definitions above)
+    const ZONE_MAX = { brain:4, leftHand:3, rightHand:4, leftFoot:3, rightFoot:3 };
+    try {
+        const mb = await fetch(`${CONFIG.apiBase}/api/mega-brain`)
+            .then(r => r.ok ? r.json() : null).catch(() => null);
+
+        if (mb?.zone_activity && Object.keys(mb.zone_activity).length > 0) {
+            // Drive zone progress from real bot activity counts (0–maxBots = 0–100%)
+            Object.entries(ZONE_MAX).forEach(([zoneId, maxBots]) => {
+                const active = mb.zone_activity[zoneId] || 0;
+                setZoneProgress(zoneId, (active / maxBots) * 100);
+            });
+        } else {
+            // Fallback: watchdog service health drives zone brightness
+            const wd = await fetch(`${CONFIG.apiBase}/api/watchdog`)
+                .then(r => r.ok ? r.json() : null).catch(() => null);
+            if (wd?.services) {
+                const frac = wd.services.filter(s => ['active','healed'].includes(s.status)).length
+                             / Math.max(wd.services.length, 1);
+                Object.keys(ZONE_MAX).forEach(zoneId => setZoneProgress(zoneId, frac * 75));
+            }
+        }
+    } catch(e) { console.error('MEGA metrics:', e); }
+}
+
+// ── Zone completion — THE CHAOS ─────────────────────────────────────────────
+
+function triggerZoneComplete(zoneId) {
+    const zone = MEGA.zones[zoneId];
+    playMegaChime(zone.pitchBase);
+
+    // Lock zone to green
+    const glow = document.getElementById(`mglow-${zoneId}`);
+    if (glow) { glow.setAttribute('fill','#00ff88'); glow.setAttribute('opacity','0.3'); }
+    const zEl = document.getElementById(`zone-${zoneId}`);
+    if (zEl) { zEl.setAttribute('stroke','#00ff88'); }
+
+    addMegaLog(`✓ ${zoneId} crew locked. ${zone.bots.join(', ')} GOING WILD.`);
+
+    // Each bot does something chaotic
+    zone.bots.forEach((name, i) => {
+        const bot = MEGA.bots[name];
+        if (!bot) return;
+        setTimeout(()=> miniOnChaos(bot, i), i*180 + Math.random()*200);
+    });
+}
+
+function miniOnChaos(bot, seed) {
+    const el = bot.el;
+    const {x, y} = bot;
+    const behaviors = [chaosJump, chaosCircle, chaosBump, chaosSpin];
+    behaviors[seed % 4](el, x, y, ()=>{
+        // Restore after chaos
+        el.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`);
+    });
+}
+
+function chaosJump(el, x, y, done) {
+    let j=0;
+    const jump = ()=>{
+        el.setAttribute('transform', `translate(${x},${y-20}) scale(1.3)`);
+        setTimeout(()=>{ el.setAttribute('transform',`translate(${x},${y})`); if(++j<5) setTimeout(jump,250); else done(); },180);
+    };
+    jump();
+}
+
+function chaosCircle(el, x, y, done) {
+    let a=0;
+    const t = setInterval(()=>{
+        a+=25;
+        const rx=x+Math.cos(a*Math.PI/180)*14, ry=y+Math.sin(a*Math.PI/180)*14;
+        el.setAttribute('transform',`translate(${rx.toFixed(1)},${ry.toFixed(1)})`);
+        if(a>=360){ clearInterval(t); done(); }
+    }, 60);
+}
+
+function chaosBump(el, x, y, done) {
+    const fx=x+(Math.random()-0.5)*40, fy=y-22;
+    el.setAttribute('transform',`translate(${fx.toFixed(1)},${fy.toFixed(1)}) rotate(60,${fx},${fy})`);
+    setTimeout(()=>{ el.setAttribute('transform',`translate(${fx.toFixed(1)},${fy+32})`); setTimeout(done,600); },400);
+}
+
+function chaosSpin(el, x, y, done) {
+    let r=0;
+    const t = setInterval(()=>{
+        r+=40;
+        el.setAttribute('transform',`translate(${x},${y}) rotate(${r},${x},${y})`);
+        if(r>=720){ clearInterval(t); done(); }
+    },50);
+}
+
+// ── Chime — like sunlight breaking through ──────────────────────────────────
+
+function playMegaChime(baseFreq) {
+    try {
+        if (!MEGA.audioCtx) MEGA.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        const ctx = MEGA.audioCtx;
+        const now = ctx.currentTime;
+        const freqs = [baseFreq, baseFreq*2, baseFreq*4, baseFreq*3];
+        const gains = [0.28, 0.20, 0.14, 0.10];
+        const decays = [4.5, 3.5, 2.5, 2.0];
+
+        freqs.forEach((f, i)=>{
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = i===3 ? 'triangle' : 'sine';
+            osc.frequency.setValueAtTime(f, now);
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(gains[i], now+0.03+i*0.04);
+            g.gain.exponentialRampToValueAtTime(0.0001, now+decays[i]);
+            osc.connect(g); g.connect(ctx.destination);
+            osc.start(now+i*0.05);
+            osc.stop(now+decays[i]+0.1);
+        });
+    } catch(e) { console.error('Chime:', e); }
+}
+
+function playMegaFullCascade() {
+    const zones = ['leftFoot','rightFoot','leftHand','rightHand','brain'];
+    zones.forEach((z,i)=> setTimeout(()=>playMegaChime(MEGA.zones[z].pitchBase), i*320));
+    // Final shimmer
+    setTimeout(()=>{
+        const ctx = MEGA.audioCtx;
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        [1320,1760,2200].forEach((f,i)=>{
+            const osc=ctx.createOscillator(), g=ctx.createGain();
+            osc.type='sine'; osc.frequency.value=f;
+            g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.08,now+0.1); g.gain.exponentialRampToValueAtTime(0.0001,now+5);
+            osc.connect(g); g.connect(ctx.destination);
+            osc.start(now+i*0.1); osc.stop(now+6);
+        });
+    }, 2200);
+}
+
+// ── Brush-off system ────────────────────────────────────────────────────────
+
+function scheduleBrushOff() {
+    const delay = 20000 + Math.random()*22000;
+    setTimeout(()=>{ executeBrushOff(); scheduleBrushOff(); }, delay);
+}
+
+function executeBrushOff() {
+    const names = Object.keys(MEGA.bots);
+    const victim = names[Math.floor(Math.random()*names.length)];
+    const bot = MEGA.bots[victim];
+    if (!bot) return;
+
+    const {el, x, y} = bot;
+    const dir = x < 200 ? -1 : 1;
+    const fx = x + dir*(35+Math.random()*25);
+    const fy = y - 18;
+
+    // Arm swipe on figure (brief)
+    const armEl = document.getElementById(dir<0 ? 'zone-leftHand' : 'zone-rightHand');
+    if (armEl) { armEl.setAttribute('stroke','#ffffff'); setTimeout(()=>armEl.setAttribute('stroke','#00ffff'),400); }
+
+    // Bot flies
+    el.setAttribute('transform', `translate(${fx.toFixed(1)},${fy.toFixed(1)}) rotate(${dir*80},${fx},${fy})`);
+    setTimeout(()=>el.setAttribute('transform',`translate(${fx.toFixed(1)},${(fy+28).toFixed(1)})`), 320);
+    setTimeout(()=>el.setAttribute('transform',`translate(${fx.toFixed(1)},${(fy+28).toFixed(1)})`), 700);
+    setTimeout(()=>el.setAttribute('transform',`translate(${x.toFixed(1)},${y.toFixed(1)})`), 1600);
+
+    addMegaLog(`${victim} got brushed off. Back in 3...2...1.`);
+}
+
+// ── MEGA activation ─────────────────────────────────────────────────────────
+
+function activateMega() {
+    if (MEGA.megaActive) return;
+    MEGA.megaActive = true;
+
+    playMegaFullCascade();
+
+    // Reveal face
+    const face = document.getElementById('mega-face');
+    if (face) {
+        let op=0;
+        const fadeIn = setInterval(()=>{
+            op = Math.min(1, op+0.05);
+            face.setAttribute('opacity', op.toFixed(2));
+            if (op>=1) { clearInterval(fadeIn); startMegaGlitchCycle(); }
+        }, 60);
+    }
+
+    // Title + subtitle
+    const t = document.getElementById('mega-panel-title');
+    if (t) t.textContent = 'MEGA-SHANEBRAIN';
+    const s = document.getElementById('mega-overall-pct');
+    if (s) s.textContent = '100% · ONLINE · TALK TO ME';
+
+    // SVG glow
+    MEGA.svgEl?.classList.add('activated');
+
+    // Show chat
+    const chatSec = document.getElementById('mega-chat-section');
+    if (chatSec) chatSec.style.display = 'flex';
+
+    // Start mouth idle
+    setInterval(megaMouthIdle, 3500+Math.random()*3000);
+
+    addMegaLog('⚡ MEGA-SHANEBRAIN IS ALIVE. Say something.');
+}
+
+function megaMouthIdle() {
+    const m = document.getElementById('mega-mouth');
+    if (!m) return;
+    m.setAttribute('height','3');
+    setTimeout(()=>m.setAttribute('height','8'), 250);
+    setTimeout(()=>m.setAttribute('height','2'), 500);
+    setTimeout(()=>m.setAttribute('height','6'), 750);
+}
+
+function startMegaGlitchCycle() {
+    const glitch = ()=>{
+        const face = document.getElementById('mega-face');
+        if (!face) return;
+        face.setAttribute('class','mega-face-glitch');
+        setTimeout(()=>face.removeAttribute('class'), 220);
+        MEGA.glitchTimeout = setTimeout(glitch, 4000+Math.random()*9000);
+    };
+    MEGA.glitchTimeout = setTimeout(glitch, 3000);
+}
+
+// ── Log helper ──────────────────────────────────────────────────────────────
+
+function addMegaLog(msg) {
+    const log = document.getElementById('mega-log');
+    if (!log) return;
+    const div = document.createElement('div');
+    div.className = 'mega-log-line';
+    const ts = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    div.textContent = `[${ts}] ${msg}`;
+    log.insertBefore(div, log.firstChild);
+    while (log.children.length > 10) log.removeChild(log.lastChild);
+}
+
+// ── Chat interface ───────────────────────────────────────────────────────────
+
+async function sendMegaMessage() {
+    const input  = document.getElementById('mega-chat-input');
+    const output = document.getElementById('mega-chat-output');
+    if (!input || !output) return;
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    const userDiv = document.createElement('div');
+    userDiv.className = 'mega-chat-line user';
+    userDiv.textContent = '> ' + msg;
+    output.appendChild(userDiv);
+
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'mega-chat-line typing';
+    typingDiv.id = 'mega-typing';
+    typingDiv.textContent = 'MEGA: . . .';
+    output.appendChild(typingDiv);
+    output.scrollTop = output.scrollHeight;
+
+    const mouth = document.getElementById('mega-mouth');
+    if (mouth) mouth.setAttribute('height','14');
+
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/mega/chat`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ message:msg, session_id:MEGA.sessionId }),
+        });
+        const data = await res.json();
+
+        document.getElementById('mega-typing')?.remove();
+        if (mouth) mouth.setAttribute('height','8');
+
+        const respText = data.response || (data.model_loading ? 'M-m-my brain is still loading. One minute.' : '[signal lost]');
+        const megaDiv = document.createElement('div');
+        megaDiv.className = 'mega-chat-line mega';
+        megaDiv.textContent = 'MEGA: ';
+        output.appendChild(megaDiv);
+
+        let i=0;
+        const type = setInterval(()=>{
+            megaDiv.textContent = 'MEGA: '+respText.slice(0,i++);
+            output.scrollTop = output.scrollHeight;
+            if(mouth && i%8===0) mouth.setAttribute('height', (4+Math.random()*10).toFixed(0));
+            if(i>respText.length){ clearInterval(type); if(mouth) mouth.setAttribute('height','4'); }
+        }, 22);
+    } catch(e) {
+        document.getElementById('mega-typing')?.remove();
+        if (mouth) mouth.setAttribute('height','4');
+        const err = document.createElement('div');
+        err.className='mega-chat-line mega'; err.textContent='MEGA: [signal lost]';
+        output.appendChild(err);
+    }
+}
+
+// =============================================================================
+// CLUSTER BRAIN
+// =============================================================================
+
+async function loadCluster() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/cluster`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        const grid = document.getElementById('cluster-grid');
+        if (grid && data.data?.nodes) {
+            grid.innerHTML = data.data.nodes.map(n => `
+                <div class="cluster-node ${n.online ? 'online' : 'offline'}">
+                    <div class="cluster-node-name">
+                        <span class="health-dot ${n.online ? 'online' : ''}"></span>
+                        ${n.name}
+                    </div>
+                    <div class="cluster-node-model">${n.online ? (n.models && n.models.length ? n.models.join(', ') : n.model || 'unknown') : 'OFFLINE'}</div>
+                    <div class="cluster-node-ping">${n.online ? (n.latency_ms != null ? n.latency_ms + ' ms' : '--') : '--'}</div>
+                </div>`).join('');
+        }
+        const msg = document.getElementById('cluster-msg');
+        if (msg) msg.textContent = data.message || '';
+    } catch (e) { console.error('Cluster load failed:', e); }
+}
+
+// =============================================================================
+// BOOK PROGRESS BRAIN
+// =============================================================================
+
+async function loadBookProgress() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/book-progress`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        const d = data.data || {};
+        const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+
+        el('book-chapters', d.chapter_count ?? '--');
+        el('book-words', d.word_count ? d.word_count.toLocaleString() : '--');
+        el('book-last', d.last_chapter ? d.last_chapter.replace(/\.(md|txt)$/, '') : '---');
+
+        // Progress bar — assume 30 chapters = 100%
+        const pct = Math.min(100, Math.round(((d.chapter_count || 0) / 30) * 100));
+        const bar = document.getElementById('book-progress-bar');
+        if (bar) bar.style.width = pct + '%';
+
+        const msg = document.getElementById('book-msg');
+        if (msg) msg.textContent = data.message || '';
+    } catch (e) { console.error('Book progress load failed:', e); }
+}
+
+// =============================================================================
+// MARKET SENTINEL BRAIN
+// =============================================================================
+
+async function loadMarketSentinel() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/market-sentinel`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        const list = document.getElementById('sentinel-list');
+        if (list && data.data?.holdings) {
+            list.innerHTML = data.data.holdings.map(h => {
+                const pct = h.change_pct != null ? h.change_pct.toFixed(2) : null;
+                const dir = pct > 0 ? 'up' : 'down';
+                const alertCls = h.alert ? 'alert-row' : '';
+                const changeCls = h.alert ? 'alert' : dir;
+                const sign = pct > 0 ? '+' : '';
+                return `<div class="sentinel-row ${alertCls}">
+                    <span class="sentinel-symbol">${h.symbol}</span>
+                    <span class="sentinel-price">${h.price != null ? '$' + h.price.toLocaleString() : '--'}</span>
+                    <span class="sentinel-change ${changeCls}">${pct != null ? sign + pct + '%' : '--'}</span>
+                </div>`;
+            }).join('');
+        }
+        const msg = document.getElementById('sentinel-msg');
+        if (msg) {
+            msg.textContent = data.message || '';
+            msg.className = 'brain-msg' + (data.data?.any_alert ? ' alert' : '');
+        }
+    } catch (e) { console.error('Market sentinel load failed:', e); }
+}
+
+// =============================================================================
+// MOOD TRACKER
+// =============================================================================
+
+let _selectedMood = null;
+
+async function loadMoodTracker() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/mood`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        const d = data.data || {};
+        const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+
+        el('mood-today', d.today != null ? `${d.today}/5` : '--');
+        el('mood-avg', d.seven_day_avg != null ? d.seven_day_avg.toFixed(1) : '--');
+        el('mood-streak', d.streak != null ? `${d.streak} days` : '--');
+
+        if (d.today != null) {
+            _selectedMood = d.today;
+            document.querySelectorAll('.mood-btn').forEach((btn, i) => {
+                btn.classList.toggle('selected', i + 1 === d.today);
+            });
+        }
+
+        const msg = document.getElementById('mood-msg');
+        if (msg) msg.textContent = data.message || '';
+    } catch (e) { console.error('Mood load failed:', e); }
+}
+
+async function logMood(rating) {
+    _selectedMood = rating;
+    document.querySelectorAll('.mood-btn').forEach((btn, i) => {
+        btn.classList.toggle('selected', i + 1 === rating);
+    });
+    const note = document.getElementById('mood-note')?.value?.trim() || '';
+    try {
+        await fetch(`${CONFIG.apiBase}/api/mood`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mood: rating, note }),
+        });
+        setTimeout(loadMoodTracker, 3000);
+    } catch (e) { console.error('Mood log failed:', e); }
+}
+
+// =============================================================================
+// SOCIAL REPORTER BRAIN
+// =============================================================================
+
+async function loadSocialReporter() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/social-reporter`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        const d = data.data || {};
+        const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+        el('social-friends', d.friend_profiles ?? '--');
+        el('social-knowledge', d.social_knowledge ?? '--');
+
+        const log = document.getElementById('social-log');
+        if (log && d.recent_log?.length) {
+            log.innerHTML = d.recent_log.slice(-8).reverse()
+                .map(line => `<div>${escapeHtml(line)}</div>`).join('');
+        }
+        const msg = document.getElementById('social-msg');
+        if (msg) msg.textContent = data.message || '';
+    } catch (e) { console.error('Social reporter load failed:', e); }
+}
+
+// =============================================================================
+// KNOWLEDGE HARVESTER BRAIN — badge on Knowledge Stars panel
+// =============================================================================
+
+async function loadKnowledgeHarvester() {
+    // Count display owned by loadKnowledgeStats — live 30s Weaviate query.
+    // Harvester brain kept for future status messages.
+    try {
+        await fetch(`${CONFIG.apiBase}/api/knowledge-harvester`);
+    } catch (e) { /* non-critical */ }
+}
+
+// =============================================================================
+// KNOWLEDGE STATS — live Weaviate counts, 30s refresh
+// =============================================================================
+
+async function loadKnowledgeStats() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/knowledge-stats`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // True total — flash yellow if it just grew
+        const countEl = document.getElementById('star-count');
+        if (countEl && data.total != null) {
+            const prev = parseInt(countEl.textContent.replace(/,/g, '')) || 0;
+            const next = data.total;
+            countEl.textContent = next.toLocaleString();
+            if (prev > 0 && next > prev) {
+                countEl.classList.add('ks-count-flash');
+                setTimeout(() => countEl.classList.remove('ks-count-flash'), 900);
+            }
+        }
+
+        // Last updated timestamp
+        const updEl = document.getElementById('ks-last-updated');
+        if (updEl && data.timestamp) {
+            updEl.textContent = 'UPDATED ' + new Date(data.timestamp).toLocaleTimeString('en-US', {
+                hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+            }).toUpperCase();
+        }
+
+        // Per-collection breakdown chips
+        const colEl = document.getElementById('ks-collections');
+        if (colEl && data.collections) {
+            const show = [
+                ['LegacyKnowledge', 'KNOWLEDGE'],
+                ['Conversation', 'CONVOS'],
+                ['ExternalPerspectives', 'AI COUNCIL'],
+                ['FriendProfile', 'FRIENDS'],
+                ['DailyNote', 'NOTES'],
+                ['SecurityLog', 'SECURITY'],
+                ['PersonalDoc', 'PERSONAL'],
+                ['SocialKnowledge', 'SOCIAL'],
+                ['PersonalDraft', 'DRAFTS'],
+            ];
+            colEl.innerHTML = show.map(([col, label]) => {
+                const n = data.collections[col];
+                if (n == null) return '';
+                return `<div class="ks-col-chip">
+                    <span class="ks-col-label">${label}</span>
+                    <span class="ks-col-count">${n.toLocaleString()}</span>
+                </div>`;
+            }).join('');
+        }
+    } catch (e) {
+        console.error('Knowledge stats failed:', e);
+    }
+}
+
+// =============================================================================
+// WEATHER BRAIN — severe alert overlay on weather panel
+// =============================================================================
+
+async function loadWeatherBrain() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/weather-brain`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        // Show alert banner if severe
+        if (data.data?.severe_alert && data.data?.alert_text) {
+            let alertEl = document.getElementById('weather-brain-alert');
+            if (!alertEl) {
+                alertEl = document.createElement('div');
+                alertEl.id = 'weather-brain-alert';
+                alertEl.className = 'weather-brain-alert';
+                const weatherPanel = document.getElementById('weather-detail');
+                if (weatherPanel) weatherPanel.prepend(alertEl);
+            }
+            alertEl.textContent = '⚠ ' + data.data.alert_text;
+        } else {
+            const alertEl = document.getElementById('weather-brain-alert');
+            if (alertEl) alertEl.remove();
+        }
+    } catch (e) { console.error('Weather brain load failed:', e); }
+}
+
+// =============================================================================
+// SYSTEM WATCHDOG BRAIN
+// =============================================================================
+
+async function loadWatchdog() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/watchdog`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        // Update service dots in the health grid using watchdog data
+        (data.services || []).forEach(svc => {
+            const dotMap = {
+                'ollama': 'h-ollama',
+                'mega-dashboard': null,
+                'angel-cloud-gateway': 'h-gateway',
+                'shanebrain-discord': null,
+                'shanebrain-social': null,
+                'shanebrain-arcade': null,
+            };
+            // Also update bot-level if available
+        });
+
+        // Watchdog status message
+        const msgEl = document.getElementById('watchdog-msg');
+        if (msgEl) {
+            msgEl.textContent = data.message || '';
+            msgEl.className = 'watchdog-msg' + (data.all_ok ? '' : ' warn');
+        }
+
+        // Heal log
+        const logEl = document.getElementById('heal-log');
+        if (logEl && data.heal_log?.length) {
+            logEl.innerHTML = data.heal_log.slice(0, 5).map(e => {
+                const cls = e.event === 'auto-healed' ? 'heal-entry' : 'heal-entry failed';
+                const icon = e.event === 'auto-healed' ? '✓' : '✗';
+                const ts = e.ts?.split('T')[1]?.slice(0, 5) || '';
+                return `<div class="${cls}">${icon} ${e.service} — ${e.event} ${ts}</div>`;
+            }).join('');
+        }
+    } catch (e) {
+        console.error('Watchdog load failed:', e);
+    }
+}
+
+// =============================================================================
+// BOTS & AGENTS PANEL
+// =============================================================================
+
+let _botsData = null;
+let _buildServices = {};
+
+async function loadBots() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/bots`);
+        _botsData = await res.json();
+        renderBots();
+    } catch (e) {
+        console.error('Bots load failed:', e);
+    }
+}
+
+function renderBots() {
+    if (!_botsData) return;
+    const list = document.getElementById('bot-list');
+    if (!list) return;
+
+    list.innerHTML = _botsData.bots.map(bot => {
+        const online = bot.service ? (_buildServices[bot.service] === 'active') : true;
+        const dotClass = online ? 'online' : '';
+        const thoughts = bot.thoughts || [];
+        const thoughtsHtml = thoughts.length
+            ? thoughts.slice(-10).reverse().map(t => {
+                const ts = t.ts ? t.ts.split('T')[1]?.slice(0,5) + ' ' + t.ts.split('T')[0]?.slice(5) : '';
+                return `<li><span class="thought-ts">${ts}</span><span>${escapeHtml(t.text)}</span></li>`;
+              }).join('')
+            : '<li style="color:rgba(255,255,255,0.3);font-style:italic">No thoughts yet</li>';
+
+        return `
+        <div class="bot-card" id="botcard-${bot.id}" onclick="toggleBotCard('${bot.id}')">
+            <div class="bot-card-header">
+                <span class="health-dot ${dotClass}"></span>
+                <span class="bot-card-name">${bot.name}</span>
+                <span class="bot-card-toggle">&#9660;</span>
+            </div>
+            <div class="bot-card-body">
+                <div class="bot-job-text">${escapeHtml(bot.job)}</div>
+                <div class="bot-thoughts-label">THOUGHTS / TASKS</div>
+                <ul class="bot-thought-list" id="thoughts-${bot.id}">${thoughtsHtml}</ul>
+                <div class="bot-thought-input-row" onclick="event.stopPropagation()">
+                    <input class="bot-thought-input" id="thought-input-${bot.id}"
+                        placeholder="Add a thought or task..."
+                        onkeydown="if(event.key==='Enter')addBotThought('${bot.id}')">
+                    <button class="action-btn-sm" onclick="addBotThought('${bot.id}')">ADD</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleBotCard(botId) {
+    const card = document.getElementById(`botcard-${botId}`);
+    if (!card) return;
+    card.classList.toggle('expanded');
+}
+
+async function addBotThought(botId) {
+    const input = document.getElementById(`thought-input-${botId}`);
+    const thought = input?.value?.trim();
+    if (!thought) return;
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/bots`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bot_id: botId, thought }),
+        });
+        _botsData = await res.json();
+        input.value = '';
+        renderBots();
+        // Re-expand the card after re-render
+        const card = document.getElementById(`botcard-${botId}`);
+        if (card) card.classList.add('expanded');
+    } catch (e) {
+        console.error('Add thought failed:', e);
+    }
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// =============================================================================
+// WEIGHT LOSS PANEL
+// =============================================================================
+
+async function loadWeightLoss() {
+    try {
+        const [weightRes, coachRes] = await Promise.all([
+            fetch(`${CONFIG.apiBase}/api/weight`),
+            fetch(`${CONFIG.apiBase}/api/weight-coach`),
+        ]);
+        const weightData = await weightRes.json();
+        const coachData  = coachRes.ok ? await coachRes.json() : null;
+        renderWeightPanel(weightData, coachData);
+    } catch (e) {
+        console.error('Weight load failed:', e);
+    }
+}
+
+function renderWeightPanel(data, coachData) {
+    const entries = data.entries || [];
+    const startWeight = data.start_weight || 382;
+
+    if (entries.length === 0) return;
+
+    const current = entries[entries.length - 1].weight;
+    const lost = +(startWeight - current).toFixed(1);
+
+    document.getElementById('weight-start').textContent = `${startWeight} lbs`;
+    document.getElementById('weight-current').textContent = `${current} lbs`;
+    document.getElementById('weight-lost').textContent = lost > 0 ? `-${lost} lbs` : `${lost} lbs`;
+
+    renderWeightChart(entries, startWeight);
+
+    // Coach brain output
+    if (coachData && coachData.status === 'ok') {
+        const msg = document.getElementById('weight-coach-msg');
+        if (msg) msg.textContent = coachData.message || '';
+
+        const proj = coachData.data?.projected_goal_date;
+        const projBox = document.getElementById('weight-projection');
+        const projVal = document.getElementById('weight-proj-val');
+        if (projBox && projVal && proj) {
+            projVal.textContent = `200 lbs by ${proj}`;
+            projBox.style.display = 'flex';
+        }
+    }
+}
+
+function renderWeightChart(entries, startWeight) {
+    const svg = d3.select('#weight-chart');
+    svg.selectAll('*').remove();
+
+    const container = document.getElementById('weight-chart');
+    const W = container.clientWidth || 300;
+    const H = 160;
+    const margin = { top: 10, right: 16, bottom: 30, left: 42 };
+    const width = W - margin.left - margin.right;
+    const height = H - margin.top - margin.bottom;
+
+    svg.attr('width', W).attr('height', H);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const weights = entries.map(e => e.weight);
+    const minW = Math.min(...weights) - 5;
+    const maxW = startWeight + 2;
+
+    const x = d3.scalePoint()
+        .domain(entries.map((_, i) => i))
+        .range([0, width])
+        .padding(0.5);
+
+    const y = d3.scaleLinear()
+        .domain([minW, maxW])
+        .range([height, 0]);
+
+    // Grid lines
+    g.append('g')
+        .attr('class', 'axis')
+        .call(d3.axisLeft(y).ticks(4).tickSize(-width).tickFormat(d => `${d}`))
+        .call(ax => ax.select('.domain').remove())
+        .call(ax => ax.selectAll('.tick line').attr('stroke', 'rgba(0,255,255,0.1)').attr('stroke-dasharray', '3 3'));
+
+    // X axis — show date labels (just month/day)
+    const xLabels = entries.map(e => {
+        const d = new Date(e.date + 'T00:00:00');
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    g.append('g')
+        .attr('class', 'axis')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickFormat(i => xLabels[i]))
+        .call(ax => ax.select('.domain').remove());
+
+    // Line
+    const line = d3.line()
+        .x((d, i) => x(i))
+        .y(d => y(d.weight))
+        .curve(d3.curveMonotoneX);
+
+    g.append('path')
+        .datum(entries)
+        .attr('fill', 'none')
+        .attr('stroke', 'var(--neon-cyan)')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+    // Dots
+    g.selectAll('.dot')
+        .data(entries)
+        .enter()
+        .append('circle')
+        .attr('class', 'dot')
+        .attr('cx', (d, i) => x(i))
+        .attr('cy', d => y(d.weight))
+        .attr('r', 4)
+        .attr('fill', 'var(--neon-cyan)')
+        .attr('stroke', '#0a0a0f')
+        .attr('stroke-width', 1.5)
+        .append('title')
+        .text(d => `${d.date}: ${d.weight} lbs`);
+
+    // Start weight reference line
+    g.append('line')
+        .attr('class', 'goal-line')
+        .attr('x1', 0).attr('x2', width)
+        .attr('y1', y(startWeight)).attr('y2', y(startWeight));
+
+    // Start weight label
+    g.append('text')
+        .attr('x', width - 2)
+        .attr('y', y(startWeight) - 3)
+        .attr('text-anchor', 'end')
+        .attr('fill', 'rgba(255,100,100,0.8)')
+        .attr('font-size', '8px')
+        .attr('font-family', 'Share Tech Mono')
+        .text(`START ${startWeight}`);
+}
+
+async function logWeight() {
+    const input = document.getElementById('weight-input');
+    const weight = parseFloat(input.value);
+    if (!weight || weight < 100 || weight > 500) {
+        input.style.borderColor = '#ff4444';
+        setTimeout(() => input.style.borderColor = '', 1500);
+        return;
+    }
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/weight`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ weight }),
+        });
+        const data = await res.json();
+        input.value = '';
+        renderWeightPanel(data, null);
+        // Brain will pick up the new entry within 5 min — poll sooner
+        setTimeout(loadWeightLoss, 8000);
+    } catch (e) {
+        console.error('Weight log failed:', e);
+    }
+}
+
+// =============================================================================
+// MEGA-SHANEBRAIN INTELLIGENCE PANEL — Self-improving bot crew dashboard
+// Polls /api/mega-brain every 30s
+// =============================================================================
+
+let _megaBrainData = null;
+
+async function loadMegaBrain() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/mega-brain`);
+        _megaBrainData = await res.json();
+        renderMegaBrain(_megaBrainData);
+    } catch (e) {
+        console.error('MegaBrain load failed:', e);
+    }
+}
+
+function renderMegaBrain(d) {
+    if (!d || d.status !== 'ok') return;
+
+    // IQ
+    const iqTrend = d.mega_iq_trend || 'stable';
+    const trendColor = iqTrend === 'improving' ? '#0f0' : iqTrend === 'declining' ? '#f44' : '#ff7700';
+    const trendArrow = iqTrend === 'improving' ? '▲' : iqTrend === 'declining' ? '▼' : '→';
+    setText('mb-iq', d.mega_iq || '--');
+    setHtml('mb-iq-trend', `<span style="color:${trendColor}">${trendArrow} ${iqTrend}</span>`);
+
+    // Corpus stats
+    setText('mb-training', d.training_count ?? '--');
+    setText('mb-memory', d.memory_count ?? '--');
+    setHtml('mb-approved', `<span style="color:#0f0">${d.arc_approved_today||0}</span>/<span style="color:#f44">${d.arc_rejected_today||0}</span>`);
+
+    // Gemini budget bar
+    const budget = d.gemini_budget || {};
+    const callsToday = budget.calls_today || 0;
+    const pct = Math.round((callsToday / 4) * 100);
+    const budgetBar = document.getElementById('mb-gemini-bar');
+    if (budgetBar) {
+        budgetBar.style.width = pct + '%';
+        budgetBar.style.background = pct >= 75 ? '#f44' : pct >= 50 ? '#ff7700' : '#0f0';
+    }
+    setText('mb-gemini-calls', `auto: ${callsToday}/4 today`);
+
+    // Manual budget (separate)
+    const manualBudget = d.gemini_manual_budget || {};
+    const manualCalls = manualBudget.calls_today || 0;
+    const manualEl = document.getElementById('mb-gemini-manual');
+    if (manualEl) manualEl.textContent = `manual: ${manualCalls}/4`;
+
+    // Gemini guidance
+    const guidance = d.gemini_guidance || d.gemini_budget || {};
+    if (guidance.overall_assessment) {
+        setText('mb-gemini-text', guidance.overall_assessment);
+        setText('mb-gemini-focus', guidance.priority_focus ? `→ ${guidance.priority_focus}` : '');
+    }
+
+    // Zone activity bars
+    const zones = d.zone_activity || {};
+    const maxZone = Math.max(1, ...Object.values(zones));
+    ['brain','leftHand','rightHand','leftFoot','rightFoot'].forEach(z => {
+        const count = zones[z] || 0;
+        const pct = Math.round((count / maxZone) * 100);
+        const bar = document.getElementById(`zone-bar-${z}`);
+        const lbl = document.getElementById(`zone-pct-${z}`);
+        if (bar) bar.style.width = Math.max(4, pct) + '%';
+        if (lbl) lbl.textContent = count;
+    });
+
+    // Bot roster
+    renderBotRoster(d.bots || []);
+
+    // Weld commit log
+    renderWeldLog(d.weld_log || []);
+}
+
+function renderBotRoster(bots) {
+    const el = document.getElementById('mb-bot-roster');
+    if (!el) return;
+    if (!bots.length) { el.innerHTML = '<div class="mb-roster-empty">No bot data yet</div>'; return; }
+
+    el.innerHTML = bots.map(b => {
+        const active = b.status === 'ACTIVE';
+        const dotColor = active ? '#0f0' : '#f44';
+        const action = (b.last_action || '').slice(0, 45);
+        const ver = b.instruction_version || 1;
+        return `<div class="mb-bot-row">
+            <span class="mb-bot-dot" style="color:${dotColor}">●</span>
+            <span class="mb-bot-name">${b.name || '?'}</span>
+            <span class="mb-bot-ver" title="Instruction version">v${ver}</span>
+            <span class="mb-bot-action">${escapeHtml(action)}</span>
+        </div>`;
+    }).join('');
+}
+
+function renderWeldLog(entries) {
+    const el = document.getElementById('mb-weld-log');
+    if (!el) return;
+    if (!entries.length) { el.innerHTML = '<div class="weld-log-empty">No commits yet</div>'; return; }
+    el.innerHTML = entries.slice().reverse().map(e => {
+        const ts = (e.ts || '').slice(11, 16);
+        const type = e.change_type || '?';
+        const target = e.target || '?';
+        const conf = e.arc_confidence ? ` (${Math.round(e.arc_confidence * 100)}%)` : '';
+        const typeColor = type === 'instruction_update_proposal' ? '#00ffff' : type === 'training_batch' ? '#0f0' : '#ff7700';
+        return `<div class="weld-log-row">
+            <span class="weld-ts">${ts}</span>
+            <span class="weld-type" style="color:${typeColor}">${type.replace('_proposal','').replace('_',' ').toUpperCase()}</span>
+            <span class="weld-target">${target}</span>
+            <span class="weld-conf">${conf}</span>
+        </div>`;
+    }).join('');
+}
+
+// ── Gemini Manual Trigger ────────────────────────────────────────────────────
+
+async function triggerGeminiManual() {
+    const btn = document.getElementById('gemini-trigger-btn');
+    if (!btn) return;
+    btn.textContent = 'ANALYZING...';
+    btn.classList.add('gemini-btn-loading');
+
+    try {
+        const resp = await fetch(`${CONFIG.apiBase}/api/gemini/trigger`, { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.result) {
+            const r = data.result;
+            const note = document.getElementById('mb-gemini-text');
+            const focus = document.getElementById('mb-gemini-focus');
+            if (note) note.textContent = r.assessment || 'Analysis complete';
+            if (focus) focus.textContent = r.recommendation ? `PRIORITY: ${r.recommendation}` : '';
+            addMegaLog(`Gemini: Grade ${r.crew_grade || '?'} — ${(r.bottleneck || '').slice(0, 60)}`);
+            btn.textContent = `GRADE: ${r.crew_grade || '?'}`;
+        } else {
+            btn.textContent = data.message || 'DONE';
+        }
+
+        if (data.budget) {
+            const manualEl = document.getElementById('mb-gemini-manual');
+            if (manualEl) manualEl.textContent = `manual: ${data.budget.calls_today}`;
+        }
+    } catch (e) {
+        btn.textContent = 'ERROR';
+        addMegaLog('Gemini trigger failed: ' + e.message);
+    } finally {
+        btn.classList.remove('gemini-btn-loading');
+        setTimeout(() => { btn.textContent = 'ACTIVATE GEMINI'; }, 3000);
+    }
+}
+
+// Helper: safely set text content
+function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
+function setHtml(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = val;
+}
+
+// Voice Dump panel — show count from knowledge harvester data
+async function loadVoiceDumpStats() {
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/knowledge-harvester`);
+        const d = await res.json();
+        const el = document.getElementById('voice-dump-stats');
+        if (!el) return;
+        const count = d?.data?.total_count ?? d?.total_count ?? null;
+        const recent = d?.data?.recent_sources ?? [];
+        const dumps = recent.filter(s => s === 'voice-dump').length;
+        if (count !== null) {
+            el.textContent = `${count} knowledge objects · ${dumps} recent voice dumps ingested`;
+        }
+    } catch (e) { /* silent */ }
+}

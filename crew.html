@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEGA CREW HQ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #080812;
+            color: #e0e0e0;
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .back-link {
+            display: inline-block;
+            color: #00fff9;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 6px 14px;
+            border: 1px solid rgba(0,255,249,0.3);
+            border-radius: 4px;
+        }
+        .back-link:hover { background: rgba(0,255,249,0.1); }
+        h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.4rem;
+            color: #00fff9;
+            text-align: center;
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            text-align: center;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 30px;
+        }
+        .crew-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .crew-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .crew-card:hover { border-color: rgba(0,255,249,0.3); }
+        .crew-img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            display: block;
+        }
+        .crew-info {
+            padding: 16px;
+        }
+        .crew-name {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+        .crew-role {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 10px;
+        }
+        .crew-desc {
+            font-size: 0.72rem;
+            line-height: 1.5;
+            color: rgba(255,255,255,0.7);
+        }
+        .crew-status {
+            display: inline-block;
+            font-size: 0.55rem;
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin-top: 10px;
+            letter-spacing: 1px;
+        }
+        .status-active {
+            background: rgba(0,255,0,0.12);
+            color: #0f0;
+            border: 1px solid rgba(0,255,0,0.3);
+        }
+        /* Color accents per character */
+        .card-arc .crew-name { color: #00e5ff; }
+        .card-weld .crew-name { color: #76ff03; }
+        .card-sentinel .crew-name { color: #b388ff; }
+        .card-scribe .crew-name { color: #ffd740; }
+        .card-pulse .crew-name { color: #ff4081; }
+        .card-echo .crew-name { color: #82b1ff; }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            h1 { font-size: 1.1rem; }
+            .crew-grid { gap: 12px; }
+            .crew-info { padding: 12px; }
+            .crew-name { font-size: 0.8rem; }
+            .crew-desc { font-size: 0.68rem; }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">&larr; DASHBOARD</a>
+    <h1>MEGA CREW HQ</h1>
+    <p class="subtitle">The autonomous crew that keeps ShaneBrain alive</p>
+
+    <div class="crew-grid">
+        <div class="crew-card card-arc">
+            <img src="crew-art/arc.png" alt="Arc" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">ARC</div>
+                <div class="crew-role">Security &amp; Governance</div>
+                <div class="crew-desc">The shield-bearer. Reviews every bot commit, enforces safety policies, and guards the perimeter. Nothing gets through without Arc's approval.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="crew-card card-weld">
+            <img src="crew-art/weld.png" alt="Weld" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">WELD</div>
+                <div class="crew-role">Builder &amp; Deployer</div>
+                <div class="crew-desc">The wrench-swinging constructor. Writes code, pushes commits, and builds infrastructure. If something needs making, Weld's already halfway done.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="crew-card card-sentinel">
+            <img src="crew-art/sentinel.png" alt="Sentinel" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">SENTINEL</div>
+                <div class="crew-role">Watchdog &amp; Monitor</div>
+                <div class="crew-desc">The all-seeing eye. Monitors every service, every container, every heartbeat. When something goes down, Sentinel knows before you do.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="crew-card card-scribe">
+            <img src="crew-art/scribe.png" alt="Scribe" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">SCRIBE</div>
+                <div class="crew-role">Knowledge &amp; Documentation</div>
+                <div class="crew-desc">The golden archivist. Ingests voice dumps, indexes knowledge, and maintains the RAG corpus. 210+ objects cataloged and growing daily.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="crew-card card-pulse">
+            <img src="crew-art/pulse.png" alt="Pulse" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">PULSE</div>
+                <div class="crew-role">Health &amp; Wellness</div>
+                <div class="crew-desc">The heartbeat. Tracks mood, monitors sobriety milestones, delivers daily letters, and keeps the human side of ShaneBrain warm.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="crew-card card-echo">
+            <img src="crew-art/echo.png" alt="Echo" class="crew-img">
+            <div class="crew-info">
+                <div class="crew-name">ECHO</div>
+                <div class="crew-role">Communications &amp; Relay</div>
+                <div class="crew-desc">The messenger. Handles Discord alerts, email monitoring, social posts, and cross-node communication. If a signal needs sending, Echo delivers.</div>
+                <span class="crew-status status-active">ACTIVE</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

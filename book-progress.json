@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T10:21:27",
+  "data": {
+    "chapter_count": 5,
+    "word_count": 23572,
+    "last_chapter": "audio-elevenlabs.txt",
+    "last_modified": "2026-03-14T23:49:36"
+  },
+  "message": "5 chapters, 23,572 words. Still building."
+}

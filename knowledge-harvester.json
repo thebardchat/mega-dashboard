@@ -1,0 +1,16 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T15:24:38.869278+00:00",
+  "data": {
+    "total_count": 2601,
+    "last_harvest_count": 5,
+    "recent_sources": [
+      "voice-dump",
+      "external-drive",
+      "voice-dump",
+      "voice-dump",
+      "voice-dump"
+    ]
+  },
+  "message": "2601 knowledge objects in Weaviate. Brain is fed."
+}

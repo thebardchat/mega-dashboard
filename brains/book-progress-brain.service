@@ -1,0 +1,14 @@
+[Unit]
+Description=ShaneBrain Brain Farm — Book Progress Brain
+After=network.target
+
+[Service]
+Type=simple
+User=shanebrain
+WorkingDirectory=/mnt/shanebrain-raid/shanebrain-core/mega-dashboard
+ExecStart=/usr/bin/python3 brains/book-progress-brain.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

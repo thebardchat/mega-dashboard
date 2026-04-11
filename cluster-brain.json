@@ -1,0 +1,65 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T10:32:54",
+  "data": {
+    "nodes": [
+      {
+        "name": "Pi",
+        "host": "localhost",
+        "port": 11434,
+        "online": true,
+        "model": "mega-brain:latest",
+        "models": [
+          "mega-brain:latest",
+          "llama3.1:8b",
+          "shanebrain-3b:latest",
+          "llama3.2:3b",
+          "nomic-embed-text:latest",
+          "llama3.2:1b"
+        ],
+        "latency_ms": 6
+      },
+      {
+        "name": "Pulsar00100",
+        "host": "100.81.70.117",
+        "port": 11434,
+        "online": true,
+        "model": "llama3.2:1b",
+        "models": [
+          "llama3.2:1b",
+          "gemma3:4b",
+          "nomic-embed-text:latest",
+          "llama3.2:3b"
+        ],
+        "latency_ms": 10
+      },
+      {
+        "name": "Bullfrog-Max-R2D2",
+        "host": "100.87.222.17",
+        "port": 11434,
+        "online": true,
+        "model": "nomic-embed-text:latest",
+        "models": [
+          "nomic-embed-text:latest",
+          "llama3.2:3b",
+          "codellama:latest"
+        ],
+        "latency_ms": 27
+      },
+      {
+        "name": "Jaxton-Laptop",
+        "host": "100.94.122.125",
+        "port": 11434,
+        "online": true,
+        "model": "llama3.2:1b",
+        "models": [
+          "llama3.2:1b"
+        ],
+        "latency_ms": 29
+      }
+    ],
+    "online_count": 4,
+    "total_count": 4
+  },
+  "message": "All 4/4 nodes online. Pi leading."
+}

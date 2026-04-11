@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShaneBrain // MEGA DASHBOARD</title>
+    <link rel="stylesheet" href="style.css?v=20260410g">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Special+Elite&family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body>
+    <!-- Scanline overlay -->
+    <div class="scanlines"></div>
+
+    <!-- Matrix Rain background -->
+    <canvas id="matrix-canvas"></canvas>
+
+    <!-- Three.js 3D background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         TOP GLANCE BAR — Always visible, at-a-glance info
+         ═══════════════════════════════════════════════════════════════ -->
+    <!-- Claude Code Brand Mark -->
+    <div class="claude-brand" title="Built with Claude Code by Shane Brazelton &amp; Claude">
+        <svg class="claude-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <g class="claude-spokes">
+                <line x1="50" y1="50" x2="50" y2="8"/>
+                <line x1="50" y1="50" x2="50" y2="92"/>
+                <line x1="50" y1="50" x2="8" y2="50"/>
+                <line x1="50" y1="50" x2="92" y2="50"/>
+                <line x1="50" y1="50" x2="21" y2="21"/>
+                <line x1="50" y1="50" x2="79" y2="79"/>
+                <line x1="50" y1="50" x2="79" y2="21"/>
+                <line x1="50" y1="50" x2="21" y2="79"/>
+                <line x1="50" y1="50" x2="35" y2="10"/>
+                <line x1="50" y1="50" x2="65" y2="90"/>
+                <line x1="50" y1="50" x2="90" y2="35"/>
+                <line x1="50" y1="50" x2="10" y2="65"/>
+            </g>
+        </svg>
+        <span class="claude-label">CLAUDE CODE</span>
+    </div>
+
+    <header class="top-bar">
+        <!-- Row 1: Clock, Date, Sobriety, Current Weather, Forecast -->
+        <div class="top-row">
+            <div class="top-item clock-group">
+                <span class="top-label">TIME</span>
+                <span class="top-value clock" id="clock">--:--:-- --</span>
+            </div>
+            <div class="top-item date-group">
+                <span class="top-label">DATE</span>
+                <span class="top-value" id="date">---</span>
+            </div>
+            <div class="top-item sobriety-group">
+                <span class="top-label">SOBER</span>
+                <span class="top-value sobriety" id="sobriety-count">--- DAYS</span>
+            </div>
+            <div class="top-item weather-now">
+                <span class="top-label">NOW</span>
+                <span class="top-value" id="weather-current">--°F ---</span>
+            </div>
+            <div class="top-item forecast-group">
+                <span class="top-label">3-DAY FORECAST</span>
+                <div class="forecast-row" id="forecast-row">
+                    <span class="forecast-day">---</span>
+                    <span class="forecast-day">---</span>
+                    <span class="forecast-day">---</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Calendar, Self-Talk, Audio Controls -->
+        <div class="top-row row-2">
+            <div class="top-item calendar-glance">
+                <span class="top-label">NEXT 3 DAYS</span>
+                <div class="calendar-row" id="calendar-row">
+                    <span class="cal-event">Loading...</span>
+                </div>
+            </div>
+            <div class="top-item self-talk">
+                <span class="top-label">SELF-TALK</span>
+                <div class="self-talk-display" id="self-talk">
+                    <span class="self-talk-text">"Loading..."</span>
+                </div>
+            </div>
+            <div class="top-item audio-controls">
+                <span class="top-label">AUDIO</span>
+                <div class="audio-buttons">
+                    <button class="audio-btn" id="btn-brown" onclick="toggleBrownNoise()" title="Brown Noise">
+                        <span class="audio-icon">~</span> BROWN
+                    </button>
+                    <button class="audio-btn" id="btn-jazz" onclick="toggleJazz()" title="Jazz Radio">
+                        <span class="audio-icon">&#9835;</span> JAZZ
+                    </button>
+                    <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="30" oninput="setVolume(this.value)" title="Volume">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MAIN DASHBOARD AREA — 3D floating panels
+         ═══════════════════════════════════════════════════════════════ -->
+    <main class="dashboard-main" id="dashboard-main">
+        <!-- Mobile-only crew link -->
+        <a href="crew.html" class="mobile-crew-link">MEGA CREW HQ &rarr;</a>
+
+        <div class="panels-container" id="panels-container">
+
+            <!-- ══════════════════════════════════════════════════════
+                 1. ECOSYSTEM MIND MAP — Full-Width Interactive Force Graph
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d panel-full-width" onclick="openEco3DFull()" style="cursor:pointer" title="Click to explore in 3D">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>QUANTUM ECOSYSTEM</h2>
+                    <span style="font-size:0.6rem;color:var(--text-secondary);margin-left:8px">click to explore 360&deg;</span>
+                    <div class="mindmap-controls">
+                        <button class="mm-btn" onclick="event.stopPropagation();openEco3DFull()" title="Fullscreen 3D">&#9974; 3D</button>
+                    </div>
+                </div>
+                <div class="panel-body mindmap-body" onclick="event.stopPropagation()">
+                    <canvas id="eco3d-canvas" style="width:100%;height:100%;display:block"></canvas>
+                    <div class="mindmap-legend" id="mindmap-legend"></div>
+                </div>
+            </div>
+
+            <!-- ECOSYSTEM 3D FULLSCREEN -->
+            <div class="mindmap-fullscreen" id="eco3d-fullscreen" style="display:none">
+                <div class="mindmap-fs-header">
+                    <div class="mindmap-fs-controls">
+                        <select class="mm-filter" id="eco3d-filter" onchange="filterEco3D(this.value)">
+                            <option value="all">ALL SERVICES</option>
+                            <option value="core">CORE</option>
+                            <option value="ai">AI</option>
+                            <option value="db">DATA</option>
+                            <option value="ui">UI</option>
+                            <option value="social">SOCIAL</option>
+                            <option value="gateway">GATEWAY</option>
+                            <option value="external">EXTERNAL</option>
+                        </select>
+                    </div>
+                    <div class="mindmap-fs-status" id="eco3d-status">QUANTUM ECOSYSTEM &mdash; Drag to orbit &bull; Scroll to zoom &bull; Click nodes for details</div>
+                    <button class="mindmap-fs-close" onclick="closeEco3DFull()">&#10005; CLOSE</button>
+                </div>
+                <canvas id="eco3d-canvas-fs" style="flex:1;width:100%;display:block"></canvas>
+                <div id="eco3d-tooltip" style="display:none;position:fixed;background:rgba(5,5,15,0.95);border:1px solid #00fff9;border-radius:4px;padding:10px 14px;max-width:320px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:#fff;z-index:9999;pointer-events:none;line-height:1.5;backdrop-filter:blur(8px)"></div>
+                <div id="eco3d-info-panel" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(5,5,15,0.92);border:1px solid #00fff9;border-radius:8px;padding:16px 24px;max-width:480px;width:90%;font-family:'Share Tech Mono',monospace;color:#fff;z-index:9998;backdrop-filter:blur(12px);transition:all 0.3s ease"></div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 2. KNOWLEDGE STARS
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d" onclick="openKnowledgeStarsFull()" style="cursor:pointer" title="Click to open full screen">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>KNOWLEDGE STARS</h2>
+                    <span class="ks-live-badge">&#9679; LIVE</span>
+                    <span style="font-size:0.65rem;color:var(--text-secondary);margin-left:8px">click to expand</span>
+                    <span class="crew-avatar-wrap" style="--crew-glow:#ffd740"><img src="crew-art/scribe.png" class="crew-avatar" alt="Scribe"><span class="crew-status-dot active"></span></span>
+                </div>
+                <div class="panel-body" onclick="event.stopPropagation()">
+                    <canvas id="stars-canvas" class="stars-canvas" onclick="openKnowledgeStarsFull()"></canvas>
+                    <div class="ks-total-row">
+                        <span class="ks-total-num" id="star-count">0</span>
+                        <span class="ks-total-label">TOTAL OBJECTS</span>
+                        <span class="ks-last-updated" id="ks-last-updated"></span>
+                    </div>
+                    <div class="ks-collections" id="ks-collections"></div>
+                </div>
+            </div>
+
+            <!-- KNOWLEDGE STARS FULL SCREEN -->
+            <div class="mindmap-fullscreen" id="stars-fullscreen" style="display:none">
+                <div class="mindmap-fs-header">
+                    <div class="mindmap-fs-controls">
+                        <input type="text" id="star-search-fs" class="thinking-input" placeholder="Search knowledge stars..." oninput="searchStars(this.value)">
+                    </div>
+                    <div class="mindmap-fs-status" id="stars-fs-status"></div>
+                    <button class="mindmap-fs-close" onclick="closeKnowledgeStarsFull()">&#10005; CLOSE</button>
+                </div>
+                <canvas id="stars-canvas-fs" style="flex:1;width:100%;display:block"></canvas>
+                <div id="star-tooltip" style="display:none;position:fixed;background:rgba(5,5,15,0.97);border:1px solid #00fff9;border-radius:4px;padding:12px 16px;max-width:340px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#fff;z-index:9999;pointer-events:none;line-height:1.6"></div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 3. SHANEBRAIN AI — Chat
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d panel-tall">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>SHANEBRAIN AI</h2>
+                </div>
+                <div class="panel-body chat-panel-body">
+                    <div class="chat-window" id="chat-window">
+                        <div class="message system-message">
+                            <span class="msg-sender">SYSTEM</span>
+                            <span class="msg-text">Neural interface ready. Local-first AI.</span>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <span class="input-caret">&gt;</span>
+                        <textarea id="chat-input" placeholder="Ask ShaneBrain..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+                        <button class="send-btn" onclick="sendChat()">TX</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 4. WEATHER
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header">
+                    <span class="panel-status" id="weather-status"></span>
+                    <h2>WEATHER</h2>
+                    <span class="crew-avatar-wrap" style="--crew-glow:#ff4081"><img src="crew-art/pulse.png" class="crew-avatar" alt="Pulse"><span class="crew-status-dot active"></span></span>
+                </div>
+                <div class="panel-body weather-detail" id="weather-detail">
+                    <div class="weather-current-detail">
+                        <div class="weather-temp-big" id="weather-temp-big">--°</div>
+                        <div class="weather-desc" id="weather-desc">Loading...</div>
+                        <div class="weather-meta">
+                            <span id="weather-humidity">Humidity: --%</span>
+                            <span id="weather-wind">Wind: -- mph</span>
+                        </div>
+                    </div>
+                    <div class="weather-forecast-detail" id="weather-forecast-detail">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. SRM + Haul Rate — one-liners, no panels -->
+            <div class="mini-construction-row">
+                <span class="mini-construction-item">🚧 SRM DISPATCH — coming soon</span>
+                <span class="mini-construction-sep">|</span>
+                <span class="mini-construction-item">🚧 HAUL RATE / PRICE CHECKER — coming soon</span>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 6. SYSTEM HEALTH
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d panel-clickable" onclick="window.open('http://100.67.120.6:61208','_blank')" title="Click to open Glances">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>SYSTEM HEALTH <span class="click-hint">tap to open</span></h2>
+                    <span class="crew-avatar-wrap" style="--crew-glow:#b388ff"><img src="crew-art/sentinel.png" class="crew-avatar" alt="Sentinel"><span class="crew-status-dot active"></span></span>
+                </div>
+                <div class="panel-body">
+                    <div class="health-grid" id="health-grid">
+                        <div class="health-item">
+                            <span class="health-dot" id="h-ollama"></span>
+                            <span>OLLAMA</span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-dot" id="h-weaviate"></span>
+                            <span>WEAVIATE</span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-dot" id="h-mcp"></span>
+                            <span>MCP SERVER</span>
+                        </div>
+                        <div class="health-item">
+                            <span class="health-dot" id="h-gateway"></span>
+                            <span>GATEWAY</span>
+                        </div>
+                    </div>
+                    <div class="health-stats">
+                        <div class="stat-row"><span>MODEL</span><span class="stat-val" id="h-model">---</span></div>
+                        <div class="stat-row"><span>KNOWLEDGE</span><span class="stat-val" id="h-knowledge">---</span></div>
+                        <div class="stat-row"><span>MEMORIES</span><span class="stat-val" id="h-memories">---</span></div>
+                        <div class="stat-row"><span>UPTIME</span><span class="stat-val" id="h-uptime">--:--:--</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 7. FOCUSED INBOX — Vue 3 Component
+                 ══════════════════════════════════════════════════════ -->
+            <div id="email-panel-mount"></div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 8. CALENDAR — Vue 3 Component
+                 ══════════════════════════════════════════════════════ -->
+            <div id="calendar-panel-mount"></div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 10. HALOFINANCE (NEW)
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>HALOFINANCE</h2>
+                </div>
+                <div class="panel-body" id="halo-panel">
+                    <div class="halo-summary">
+                        <div class="halo-row">
+                            <span class="halo-label">PORTFOLIO</span>
+                            <span class="halo-val" id="halo-portfolio">$--,---</span>
+                        </div>
+                        <div class="halo-row">
+                            <span class="halo-label">24H CHANGE</span>
+                            <span class="halo-val" id="halo-change">--%</span>
+                        </div>
+                        <div class="halo-row">
+                            <span class="halo-label">TOP HOLDING</span>
+                            <span class="halo-val" id="halo-top">---</span>
+                        </div>
+                        <div class="halo-row">
+                            <span class="halo-label">ALERT</span>
+                            <span class="halo-val" id="halo-alert">No alerts</span>
+                        </div>
+                    </div>
+                    <a href="https://github.com/thebardchat/HaloFinance-private" target="_blank" rel="noopener" class="halo-open-btn">OPEN HALOFINANCE →</a>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 11. LIVE NETWORK (NEW) — Tailscale Nodes
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d panel-tall">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>LIVE NETWORK</h2>
+                    <span class="crew-avatar-wrap" style="--crew-glow:#82b1ff"><img src="crew-art/echo.png" class="crew-avatar" alt="Echo"><span class="crew-status-dot active"></span></span>
+                </div>
+                <div class="panel-body">
+                    <div class="network-grid" id="network-grid">
+                        <div class="network-node" data-ip="100.67.120.6">
+                            <span class="health-dot" id="net-pi"></span>
+                            <span class="node-name">Pi</span>
+                            <span class="node-ip">100.67.120.6</span>
+                            <span class="node-ping" id="ping-pi">-- ms</span>
+                        </div>
+                        <div class="network-node" data-ip="100.81.70.117">
+                            <span class="health-dot" id="net-pulsar"></span>
+                            <span class="node-name">Pulsar</span>
+                            <span class="node-ip">100.81.70.117</span>
+                            <span class="node-ping" id="ping-pulsar">-- ms</span>
+                        </div>
+                        <div class="network-node" data-ip="100.94.122.125">
+                            <span class="health-dot" id="net-laptop"></span>
+                            <span class="node-name">Laptop</span>
+                            <span class="node-ip">100.94.122.125</span>
+                            <span class="node-ping" id="ping-laptop">-- ms</span>
+                        </div>
+                        <div class="network-node" data-ip="100.87.222.17">
+                            <span class="health-dot" id="net-bullfrog"></span>
+                            <span class="node-name">Bullfrog</span>
+                            <span class="node-ip">100.87.222.17</span>
+                            <span class="node-ping" id="ping-bullfrog">-- ms</span>
+                        </div>
+                    </div>
+                    <div class="net-chat-area">
+                        <div class="net-chat-messages" id="net-chat-messages"></div>
+                        <div class="net-chat-input-row">
+                            <input type="text" id="net-chat-input" class="net-chat-input" placeholder="Message the network..." onkeydown="if(event.key==='Enter')sendNetChat()">
+                            <button class="mm-btn" onclick="sendNetChat()">TX</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 12. DAILY LETTER TO MY SONS
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d panel-full-width letter-panel">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>DAILY LETTER TO MY SONS</h2>
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <button class="mm-btn" onclick="openLetterModal('today')" title="Read Today's Letter">&#9993; READ</button>
+                        <button class="mm-btn" onclick="openArchiveModal()" title="View Archive">&#128193; ARCHIVE</button>
+                    </div>
+                </div>
+                <div class="panel-body daily-letter-body">
+                    <div class="letter-preview" id="letter-preview" onclick="openLetterModal('today')">
+                        <div class="letter-preview-inner">
+                            <div class="letter-postmark" id="letter-postmark-date"></div>
+                            <div class="letter-wax-seal"><span>B</span></div>
+                            <div class="letter-greeting">Dear Sons,</div>
+                            <div class="letter-preview-snippet" id="letter-preview-snippet">Click to read today's letter</div>
+                            <div class="letter-preview-son" id="letter-preview-son"></div>
+                            <div class="letter-preview-date" id="letter-preview-date">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="letter-archive-strip" id="letter-archive-strip">
+                        <!-- Recent letters as clickable stamps -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Letter Modal -->
+            <div class="letter-modal-overlay" id="letter-modal-overlay" onclick="closeLetterModal()" style="display:none">
+                <div class="letter-modal" onclick="event.stopPropagation()">
+                    <button class="letter-modal-close" onclick="closeLetterModal()">&#10005;</button>
+                    <div class="letter-paper" id="letter-paper">
+                        <div class="letter-paper-loading">Pulling from the heart...</div>
+                    </div>
+                    <div class="letter-modal-seal"><span>B</span></div>
+                </div>
+            </div>
+
+            <!-- Archive Modal -->
+            <div class="letter-modal-overlay" id="archive-modal-overlay" onclick="closeArchiveModal()" style="display:none">
+                <div class="letter-modal letter-archive-modal" onclick="event.stopPropagation()">
+                    <button class="letter-modal-close" onclick="closeArchiveModal()">&#10005;</button>
+                    <h3 class="archive-title">&#128193; Letter Archive</h3>
+                    <div class="archive-list" id="archive-list">Loading...</div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 13. QUICK LINKS — Tools & Services
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>QUICK LINKS</h2>
+                </div>
+                <div class="panel-body">
+                    <div class="quick-links-grid">
+                        <a href="http://100.67.120.6:3000" target="_blank" class="quick-link-btn ql-green">
+                            <span class="ql-icon">&#x1F4AC;</span>
+                            <span class="ql-name">Open WebUI</span>
+                            <span class="ql-port">:3000</span>
+                        </a>
+                        <a href="http://100.67.120.6:9000" target="_blank" class="quick-link-btn ql-cyan">
+                            <span class="ql-icon">&#x1F433;</span>
+                            <span class="ql-name">Portainer</span>
+                            <span class="ql-port">:9000</span>
+                        </a>
+                        <a href="http://100.67.120.6:5678" target="_blank" class="quick-link-btn ql-orange">
+                            <span class="ql-icon">&#x26A1;</span>
+                            <span class="ql-name">N8N Workflows</span>
+                            <span class="ql-port">:5678</span>
+                        </a>
+                        <a href="http://100.67.120.6:8200" target="_blank" class="quick-link-btn ql-purple">
+                            <span class="ql-icon">&#x1F3A4;</span>
+                            <span class="ql-name">Voice Dump</span>
+                            <span class="ql-port">:8200</span>
+                        </a>
+                        <a href="http://100.67.120.6:61208" target="_blank" class="quick-link-btn ql-red">
+                            <span class="ql-icon">&#x1F4CA;</span>
+                            <span class="ql-name">Glances</span>
+                            <span class="ql-port">:61208</span>
+                        </a>
+                        <a href="https://github.com/thebardchat" target="_blank" class="quick-link-btn ql-white">
+                            <span class="ql-icon">&#x1F4BB;</span>
+                            <span class="ql-name">GitHub</span>
+                            <span class="ql-port">thebardchat</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 13. VOICE DUMP
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>VOICE DUMP</h2>
+                </div>
+                <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px 12px">
+                    <a href="http://100.67.120.6:8200" target="_blank" class="voice-launch-btn">
+                        &#9679; OPEN RECORDER
+                    </a>
+                    <div style="font-size:0.55rem;color:rgba(255,255,255,0.3);text-align:center;letter-spacing:0.08em">
+                        Voice Dump Pipeline · port 8200<br>
+                        Auto-transcribes · ingests to Weaviate daily at 4 AM
+                    </div>
+                    <div id="voice-dump-stats" style="font-size:0.6rem;color:rgba(0,255,255,0.6);text-align:center"></div>
+                </div>
+            </div>
+
+            <!-- Noir pieces modal removed -->
+
+            <!-- ══════════════════════════════════════════════════════
+                 14. AI BUILD STATUS (NEW)
+                 ══════════════════════════════════════════════════════ -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2>AI BUILD STATUS</h2>
+                    <span class="crew-avatar-wrap" style="--crew-glow:#76ff03"><img src="crew-art/weld.png" class="crew-avatar" alt="Weld"><span class="crew-status-dot active"></span></span>
+                </div>
+                <div class="panel-body">
+                    <div class="build-feed" id="build-feed">
+                        <div class="build-entry">
+                            <span class="build-time">--:--</span>
+                            <span class="build-agent">---</span>
+                            <span class="build-msg">Waiting for build activity...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SRM Truck Scheduler merged into SRM DISPATCH panel above -->
+
+            <!-- MEGA-SHANEBRAIN INTELLIGENCE PANEL -->
+            <div class="dash-panel panel-3d panel-full-width" id="mega-panel">
+                <div class="panel-header">
+                    <span class="panel-status online"></span>
+                    <h2 id="mega-panel-title">MEGA-SHANEBRAIN</h2>
+                    <span class="mega-subtitle" id="mega-overall-pct">17 BOTS · AUTONOMOUS · SELF-IMPROVING</span>
+                </div>
+                <div class="panel-body mega-panel-body">
+
+                    <!-- ROW 1: IQ + Corpus Stats + Gemini Budget -->
+                    <div class="mega-stats-row">
+                        <div class="mega-stat-card">
+                            <span class="mega-stat-label">MEGA IQ</span>
+                            <span class="mega-stat-val" id="mb-iq">--</span>
+                            <span class="mega-stat-trend" id="mb-iq-trend">stable</span>
+                        </div>
+                        <div class="mega-stat-card">
+                            <span class="mega-stat-label">TRAINING</span>
+                            <span class="mega-stat-val" id="mb-training">--</span>
+                            <span class="mega-stat-sub">samples</span>
+                        </div>
+                        <div class="mega-stat-card">
+                            <span class="mega-stat-label">MEMORY</span>
+                            <span class="mega-stat-val" id="mb-memory">--</span>
+                            <span class="mega-stat-sub">conversations</span>
+                        </div>
+                        <div class="mega-stat-card">
+                            <span class="mega-stat-label">ARC TODAY</span>
+                            <span class="mega-stat-val" id="mb-approved"><span style="color:#0f0">--</span>/<span style="color:#f44">--</span></span>
+                            <span class="mega-stat-sub">approved/rejected</span>
+                        </div>
+                        <div class="mega-stat-card gemini-budget-card">
+                            <span class="mega-stat-label">GEMINI BUDGET</span>
+                            <div class="gemini-budget-bar-wrap">
+                                <div class="gemini-budget-bar" id="mb-gemini-bar" style="width:0%"></div>
+                            </div>
+                            <span class="mega-stat-sub" id="mb-gemini-calls">0/4 calls today</span>
+                            <button class="gemini-trigger-btn" id="gemini-trigger-btn" onclick="triggerGeminiManual()" title="Manual analysis — separate budget from auto">ACTIVATE GEMINI</button>
+                            <span class="mega-stat-sub gemini-manual-sub" id="mb-gemini-manual">manual: 0/4</span>
+                        </div>
+                    </div>
+
+                    <!-- MEGA CREW — Character Lineup -->
+                    <div class="mega-crew-row" style="display:flex; justify-content:center; gap:16px; padding:12px 0; flex-wrap:wrap;">
+                        <div class="crew-lineup-slot" style="--crew-glow:#00e5ff; --bob-duration:3.8s; text-align:center;">
+                            <img src="crew-art/arc.png" class="crew-lineup-char" alt="Arc">
+                            <div class="crew-lineup-name" style="color:#00e5ff;">ARC</div>
+                        </div>
+                        <div class="crew-lineup-slot" style="--crew-glow:#76ff03; --bob-duration:4.2s; text-align:center;">
+                            <img src="crew-art/weld.png" class="crew-lineup-char" alt="Weld">
+                            <div class="crew-lineup-name" style="color:#76ff03;">WELD</div>
+                        </div>
+                        <div class="crew-lineup-slot" style="--crew-glow:#b388ff; --bob-duration:3.5s; text-align:center;">
+                            <img src="crew-art/sentinel.png" class="crew-lineup-char" alt="Sentinel">
+                            <div class="crew-lineup-name" style="color:#b388ff;">SENTINEL</div>
+                        </div>
+                        <div class="crew-lineup-slot" style="--crew-glow:#ffd740; --bob-duration:4.6s; text-align:center;">
+                            <img src="crew-art/scribe.png" class="crew-lineup-char" alt="Scribe">
+                            <div class="crew-lineup-name" style="color:#ffd740;">SCRIBE</div>
+                        </div>
+                        <div class="crew-lineup-slot" style="--crew-glow:#ff4081; --bob-duration:3.3s; text-align:center;">
+                            <img src="crew-art/pulse.png" class="crew-lineup-char" alt="Pulse">
+                            <div class="crew-lineup-name" style="color:#ff4081;">PULSE</div>
+                        </div>
+                        <div class="crew-lineup-slot" style="--crew-glow:#82b1ff; --bob-duration:4.0s; text-align:center;">
+                            <img src="crew-art/echo.png" class="crew-lineup-char" alt="Echo">
+                            <div class="crew-lineup-name" style="color:#82b1ff;">ECHO</div>
+                        </div>
+                    </div>
+
+                    <!-- ROW 2: Zone bars + Bot roster -->
+                    <div class="mega-layout">
+                        <div class="mega-zones-col">
+                            <div class="mega-zones-title">ZONE ACTIVITY</div>
+                            <div class="mega-zones">
+                                <div class="mega-zone-row"><span class="mega-zone-label">BRAIN</span><div class="mega-zone-bar-wrap"><div class="mega-zone-bar" id="zone-bar-brain" style="width:0%"></div></div><span class="mega-zone-pct" id="zone-pct-brain">0</span></div>
+                                <div class="mega-zone-row"><span class="mega-zone-label">L.HAND</span><div class="mega-zone-bar-wrap"><div class="mega-zone-bar" id="zone-bar-leftHand" style="width:0%"></div></div><span class="mega-zone-pct" id="zone-pct-leftHand">0</span></div>
+                                <div class="mega-zone-row"><span class="mega-zone-label">R.HAND</span><div class="mega-zone-bar-wrap"><div class="mega-zone-bar" id="zone-bar-rightHand" style="width:0%"></div></div><span class="mega-zone-pct" id="zone-pct-rightHand">0</span></div>
+                                <div class="mega-zone-row"><span class="mega-zone-label">L.FOOT</span><div class="mega-zone-bar-wrap"><div class="mega-zone-bar" id="zone-bar-leftFoot" style="width:0%"></div></div><span class="mega-zone-pct" id="zone-pct-leftFoot">0</span></div>
+                                <div class="mega-zone-row"><span class="mega-zone-label">R.FOOT</span><div class="mega-zone-bar-wrap"><div class="mega-zone-bar" id="zone-bar-rightFoot" style="width:0%"></div></div><span class="mega-zone-pct" id="zone-pct-rightFoot">0</span></div>
+                            </div>
+                            <!-- Gemini strategic note -->
+                            <div class="gemini-guidance-box" id="mb-gemini-note">
+                                <span class="gemini-guidance-label">GEMINI STRATEGY</span>
+                                <span class="gemini-guidance-text" id="mb-gemini-text">Awaiting first analysis...</span>
+                                <span class="gemini-guidance-focus" id="mb-gemini-focus"></span>
+                            </div>
+                        </div>
+
+                        <!-- Bot roster with instruction versions -->
+                        <div class="mega-bot-roster" id="mb-bot-roster">
+                            <!-- Populated by JS -->
+                        </div>
+
+                        <!-- Weld commit log -->
+                        <div class="mega-weld-log-col">
+                            <div class="mega-zones-title">RECENT COMMITS (WELD)</div>
+                            <div class="mega-weld-log" id="mb-weld-log">
+                                <div class="weld-log-empty">No commits yet</div>
+                            </div>
+                            <div class="mega-chat-section">
+                                <div class="mega-chat-output" id="mega-chat-output"></div>
+                                <div class="mega-chat-input-row">
+                                    <input type="text" id="mega-chat-input" class="mega-chat-input" placeholder="Talk to MEGA-SHANEBRAIN..." onkeydown="if(event.key==='Enter')sendMegaMessage()">
+                                    <button class="action-btn-sm" onclick="sendMegaMessage()">TX</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OLLAMA CLUSTER -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header"><span class="panel-status online"></span><h2>OLLAMA CLUSTER</h2><span class="crew-avatar-wrap" style="--crew-glow:#00e5ff"><img src="crew-art/arc.png" class="crew-avatar" alt="Arc"><span class="crew-status-dot active"></span></span></div>
+                <div class="panel-body"><div class="cluster-grid" id="cluster-grid"></div><div class="brain-msg" id="cluster-msg"></div></div>
+            </div>
+
+            <!-- BOOK PROGRESS -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header"><span class="panel-status online"></span><h2>BOOK PROGRESS</h2></div>
+                <div class="panel-body">
+                    <div class="book-stats">
+                        <div class="book-stat"><span class="weight-label">CHAPTERS</span><span class="weight-val" id="book-chapters">--</span></div>
+                        <div class="book-stat"><span class="weight-label">WORDS</span><span class="weight-val" id="book-words">--</span></div>
+                        <div class="book-stat"><span class="weight-label">LAST EDIT</span><span class="weight-val" id="book-last" style="font-size:0.6rem">---</span></div>
+                    </div>
+                    <div class="book-progress-bar-wrap"><div class="book-progress-bar" id="book-progress-bar" style="width:0%"></div></div>
+                    <div class="brain-msg" id="book-msg"></div>
+                </div>
+            </div>
+
+            <!-- MARKET SENTINEL -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header"><span class="panel-status online"></span><h2>MARKET SENTINEL</h2></div>
+                <div class="panel-body"><div class="sentinel-list" id="sentinel-list"></div><div class="brain-msg" id="sentinel-msg"></div></div>
+            </div>
+
+            <!-- MOOD TRACKER -->
+            <div class="dash-panel panel-3d">
+                <div class="panel-header"><span class="panel-status online"></span><h2>MOOD TRACKER</h2></div>
+                <div class="panel-body">
+                    <div class="mood-stats">
+                        <div class="mood-stat"><span class="weight-label">TODAY</span><span class="weight-val" id="mood-today">--</span></div>
+                        <div class="mood-stat"><span class="weight-label">7-DAY AVG</span><span class="weight-val" id="mood-avg">--</span></div>
+                        <div class="mood-stat"><span class="weight-label">STREAK</span><span class="weight-val" id="mood-streak">-- days</span></div>
+                    </div>
+                    <div class="mood-buttons">
+                        <button class="mood-btn" onclick="logMood(1)">1</button>
+                        <button class="mood-btn" onclick="logMood(2)">2</button>
+                        <button class="mood-btn" onclick="logMood(3)">3</button>
+                        <button class="mood-btn" onclick="logMood(4)">4</button>
+                        <button class="mood-btn" onclick="logMood(5)">5</button>
+                    </div>
+                    <div class="mood-input-row" style="display:flex;gap:6px;margin-top:6px;align-items:center">
+                        <input type="text" id="mood-note" class="weight-input" placeholder="How are you feeling?" style="flex:1" onkeydown="if(event.key==='Enter')saveMood()">
+                        <button class="action-btn-sm mood-save-btn" id="mood-save-btn" onclick="saveMood()">SAVE</button>
+                    </div>
+                    <div class="brain-msg" id="mood-msg"></div>
+                </div>
+            </div>
+
+            <!-- SOCIAL REPORTER removed -->
+
+            <!-- WEIGHT LOSS -->
+            <div class="dash-panel panel-3d panel-tall">
+                <div class="panel-header"><span class="panel-status online"></span><h2>WEIGHT LOSS</h2></div>
+                <div class="panel-body weight-panel-body">
+                    <div class="weight-stats">
+                        <div class="weight-stat"><span class="weight-label">START</span><span class="weight-val" id="weight-start">382 lbs</span></div>
+                        <div class="weight-stat"><span class="weight-label">CURRENT</span><span class="weight-val" id="weight-current">-- lbs</span></div>
+                        <div class="weight-stat"><span class="weight-label">LOST</span><span class="weight-val weight-lost" id="weight-lost">-- lbs</span></div>
+                    </div>
+                    <div class="weight-projection" id="weight-projection" style="display:none">
+                        <span class="weight-label">AT THIS PACE</span>
+                        <span class="weight-proj-val" id="weight-proj-val">200 lbs by ---</span>
+                    </div>
+                    <svg id="weight-chart" class="weight-chart"></svg>
+                    <div class="weight-coach-msg" id="weight-coach-msg"></div>
+                    <div class="weight-log-form">
+                        <input type="number" id="weight-input" class="weight-input" placeholder="Enter weight (lbs)" min="100" max="500" step="0.1" onkeydown="if(event.key==='Enter')logWeight()">
+                        <button class="action-btn-sm" onclick="logWeight()">LOG</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════
+                 COMMUNITY HUB — Vue 3 Component
+                 ══════════════════════════════════════════════════════ -->
+            <div id="community-panel-mount"></div>
+
+            <!-- BOTS & AGENTS (dynamic) -->
+            <div class="dash-panel panel-3d panel-full-width">
+                <div class="panel-header"><span class="panel-status online"></span><h2>BOTS &amp; AGENTS</h2></div>
+                <div class="panel-body"><div class="bot-list" id="bot-list"></div></div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         BOTTOM TICKER 1 — NYSE / Finance scrolling ticker
+         ═══════════════════════════════════════════════════════════════ -->
+    <footer class="ticker-bar ticker-bar-1">
+        <div class="ticker-label">MARKETS</div>
+        <div class="ticker-strip" id="ticker-strip">
+            <!-- Populated by JS — stocks, mutual funds -->
+        </div>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         BOTTOM TICKER 2 — Crypto / System Status scrolling ticker
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="ticker-bar ticker-bar-2">
+        <div class="ticker-label">SYSTEM</div>
+        <div class="ticker-strip" id="ticker-strip-2">
+            <!-- Populated by JS — crypto, system status, node pings -->
+        </div>
+    </div>
+
+    <!-- Panel JS — split from app.js for maintainability -->
+    <script src="panels/mega-crew.js"></script>
+    <script src="panels/shared.js"></script>
+    <script src="panels/clock-sobriety.js"></script>
+    <script src="panels/self-talk.js"></script>
+    <script src="panels/matrix-rain.js"></script>
+    <script src="panels/bg-3d.js"></script>
+    <script src="panels/knowledge-stars.js"></script>
+    <script src="panels/weather.js"></script>
+    <script src="panels/tickers.js"></script>
+    <script src="panels/health.js"></script>
+    <script src="panels/logistics.js"></script>
+    <script src="panels/chat.js"></script>
+    <script src="panels/calendar.js"></script>
+    <script src="panels/email.js"></script>
+    <script src="panels/audio.js"></script>
+    <script src="panels/ecosystem-mindmap.js"></script>
+    <script src="panels/ecosystem-3d.js"></script>
+    <script src="panels/network-build.js"></script>
+    <script src="panels/voice-dump.js"></script>
+    <script src="panels/daily-letter.js"></script>
+    <script src="panels/community.js"></script>
+    <!-- thinking-mindmap.js removed — replaced by Quick Links -->
+    <script src="panels/mega-construction.js"></script>
+    <script src="panels/brain-panels.js"></script>
+    <script src="panels/bots-agents.js"></script>
+    <script src="panels/weight-loss.js"></script>
+    <script src="panels/mega-intelligence.js"></script>
+    <script src="panels/mega-antics.js"></script>
+    <script src="panels/mega-antics-grounded.js"></script>
+    <script src="panels/init.js"></script>
+</body>
+</html>

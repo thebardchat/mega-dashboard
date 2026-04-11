@@ -1,0 +1,67 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T15:32:21",
+  "data": {
+    "holdings": [
+      {
+        "symbol": "RFNGX",
+        "price": 93.89,
+        "prev_close": 93.7,
+        "change_pct": 0.2,
+        "alert": false
+      },
+      {
+        "symbol": "RICAX",
+        "price": 61.94,
+        "prev_close": 61.8,
+        "change_pct": 0.23,
+        "alert": false
+      },
+      {
+        "symbol": "RGAGX",
+        "price": 77.83,
+        "prev_close": 77.83,
+        "change_pct": 0.0,
+        "alert": false
+      },
+      {
+        "symbol": "BTC-USD",
+        "price": 72801.17,
+        "prev_close": 72974.195,
+        "change_pct": -0.24,
+        "alert": false
+      },
+      {
+        "symbol": "DOGE-USD",
+        "price": 0.0928,
+        "prev_close": 0.0937,
+        "change_pct": -0.98,
+        "alert": false
+      },
+      {
+        "symbol": "ETH-USD",
+        "price": 2249.178,
+        "prev_close": 2245.396,
+        "change_pct": 0.17,
+        "alert": false
+      },
+      {
+        "symbol": "SPY",
+        "price": 679.46,
+        "prev_close": 679.91,
+        "change_pct": -0.07,
+        "alert": false
+      },
+      {
+        "symbol": "QQQ",
+        "price": 611.07,
+        "prev_close": 610.19,
+        "change_pct": 0.14,
+        "alert": false
+      }
+    ],
+    "alerts": [],
+    "any_alert": false
+  },
+  "message": "Markets quiet."
+}

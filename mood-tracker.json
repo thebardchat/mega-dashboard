@@ -1,0 +1,33 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T15:31:16",
+  "data": {
+    "today": 4,
+    "today_note": "it is going to be a good day",
+    "seven_day_avg": 4.2,
+    "streak": 4,
+    "entries": [
+      {
+        "date": "2026-04-11",
+        "mood": 4,
+        "note": "it is going to be a good day"
+      },
+      {
+        "date": "2026-04-10",
+        "mood": 5,
+        "note": "optimistic after trying to get the second screen on and could not"
+      },
+      {
+        "date": "2026-04-09",
+        "mood": 5,
+        "note": "great day"
+      },
+      {
+        "date": "2026-04-08",
+        "mood": 3,
+        "note": "Good day, stressful"
+      }
+    ]
+  },
+  "message": "4-day streak. Averaging 4.2 \u2014 solid week."
+}

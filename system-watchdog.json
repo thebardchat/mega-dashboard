@@ -1,0 +1,75 @@
+{
+  "status": "ok",
+  "updated": "2026-04-11T10:32:43",
+  "all_ok": true,
+  "services": [
+    {
+      "name": "ollama",
+      "status": "active"
+    },
+    {
+      "name": "mega-dashboard",
+      "status": "active"
+    },
+    {
+      "name": "angel-cloud-gateway",
+      "status": "active"
+    },
+    {
+      "name": "shanebrain-discord",
+      "status": "active"
+    },
+    {
+      "name": "shanebrain-social",
+      "status": "active"
+    },
+    {
+      "name": "shanebrain-arcade",
+      "status": "active"
+    },
+    {
+      "name": "shanebrain-alerter",
+      "status": "active"
+    },
+    {
+      "name": "buddy-claude",
+      "status": "active"
+    },
+    {
+      "name": "weight-coach-brain",
+      "status": "active"
+    },
+    {
+      "name": "system-watchdog-brain",
+      "status": "active"
+    }
+  ],
+  "heal_log": [
+    {
+      "service": "mega-dashboard",
+      "event": "restart-failed",
+      "ts": "2026-04-10T12:05:17"
+    },
+    {
+      "service": "ollama",
+      "event": "auto-healed",
+      "ts": "2026-04-09T11:39:05"
+    },
+    {
+      "service": "ollama",
+      "event": "auto-healed",
+      "ts": "2026-04-08T23:44:05"
+    },
+    {
+      "service": "ollama",
+      "event": "auto-healed",
+      "ts": "2026-04-08T23:04:34"
+    },
+    {
+      "service": "mega-dashboard",
+      "event": "auto-healed",
+      "ts": "2026-04-08T22:52:15"
+    }
+  ],
+  "message": "All systems nominal."
+}
